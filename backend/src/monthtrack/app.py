@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -17,7 +18,19 @@ from monthtrack.storage import (
 
 
 def create_app(data_dir: str = "data") -> FastAPI:
-    app = FastAPI(title="monthTrack")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        cat_path = Path(data_dir) / "cat.md"
+        if not cat_path.exists():
+            initial = [
+                "Gym", "Lazer", "Presentes", "Restaurante",
+                "Mercado", "Casa", "Pessoal", "Saúde",
+            ]
+            cat_path.write_text("\n".join(f"- {c}" for c in initial) + "\n", encoding="utf-8")
+        yield
+
+    app = FastAPI(title="monthTrack", lifespan=lifespan)
     app.state.data_dir = data_dir
 
     @app.get("/api/months")
@@ -125,18 +138,19 @@ def create_app(data_dir: str = "data") -> FastAPI:
 
     here = Path(__file__).resolve().parent.parent.parent
     frontend_dir = here / "frontend"
+
     if frontend_dir.exists():
         app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
         @app.get("/")
         @app.get("/{path:path}")
         def serve_frontend(path: str = ""):
-            if path.startswith("api/"):
-                return JSONResponse({"detail": "Not found"}, status_code=404)
-            index = frontend_dir / "index.html"
-            if not index.exists():
-                return JSONResponse({"detail": "Frontend not found"}, status_code=404)
-            return FileResponse(str(index))
+                if path.startswith("api/"):
+                    return JSONResponse({"detail": "Not found"}, status_code=404)
+                index = frontend_dir / "index.html"
+                if not index.exists():
+                    return JSONResponse({"detail": "Frontend not found"}, status_code=404)
+                return FileResponse(str(index))
 
     return app
 
