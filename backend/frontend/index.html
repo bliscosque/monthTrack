@@ -288,6 +288,7 @@ async function api(method, path, body) {
   const opts = { method, headers: {'Accept':'application/json'} };
   if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   const r = await fetch(path, opts);
+  if (!r.ok) return null;
   if (r.status === 204) return null;
   return r.json();
 }
@@ -331,12 +332,16 @@ async function loadDashboard() {
 }
 
 function renderMonth(data) {
+  document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
   if (!data) {
-    document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
     document.getElementById('expenseList').innerHTML = '<div class="empty">Mês vazio. Defina um budget.</div>';
+    document.getElementById('budgetVal').textContent = '0,00';
+    document.getElementById('spentVal').textContent = '0,00';
+    document.getElementById('leftVal').textContent = '0,00';
+    document.getElementById('barFill').style.width = '0%';
+    document.getElementById('catBreakdown').innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
     return;
   }
-  document.getElementById('monthLabel').textContent = `${MONTHS[data.month-1]} ${data.year}`;
   if (data.expenses.length === 0) {
     document.getElementById('expenseList').innerHTML = '<div class="empty">Nenhuma despesa ainda</div>';
   } else {
