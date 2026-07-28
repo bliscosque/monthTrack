@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 
 from monthtrack.models import (
     MonthData, BudgetUpdate, ExpenseCreate, ExpenseUpdate,
@@ -118,6 +122,21 @@ def create_app(data_dir: str = "data") -> FastAPI:
         ok = delete_category(app.state.data_dir, name)
         if not ok:
             raise HTTPException(status_code=404, detail="Category not found")
+
+    here = Path(__file__).resolve().parent.parent.parent
+    frontend_dir = here / "frontend"
+    if frontend_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+        @app.get("/")
+        @app.get("/{path:path}")
+        def serve_frontend(path: str = ""):
+            if path.startswith("api/"):
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            index = frontend_dir / "index.html"
+            if not index.exists():
+                return JSONResponse({"detail": "Frontend not found"}, status_code=404)
+            return FileResponse(str(index))
 
     return app
 

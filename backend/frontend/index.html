@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>monthTrack</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --surface2: #2a2a2a;
+  --text: #e0e0e0;
+  --text2: #a0a0a0;
+  --accent: #4fc3f7;
+  --green: #66bb6a;
+  --red: #ef5350;
+  --orange: #ffa726;
+  --border: #333;
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.5; padding: 0; min-height: 100dvh;
+}
+.app { max-width: 480px; margin: 0 auto; padding: 12px; }
+
+/* header */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.header h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
+.month-nav { display: flex; align-items: center; gap: 10px; }
+.month-nav button {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  width: 36px; height: 36px; border-radius: 50%; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.month-nav button:active { opacity: .7; }
+.month-nav span { font-size: 15px; font-weight: 600; min-width: 100px; text-align: center; }
+
+/* cards */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px;
+}
+.card h3 { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
+
+/* summary */
+.summary-grid { display: flex; gap: 8px; }
+.summary-item { flex: 1; text-align: center; padding: 8px 4px; border-radius: 8px; background: var(--surface2); }
+.summary-item .value { font-size: 20px; font-weight: 700; }
+.summary-item .label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.bar-wrap { margin-top: 10px; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width .3s; }
+.bar-over { background: var(--red); }
+
+/* categories */
+.cat-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-badge {
+  background: var(--surface2); padding: 4px 10px; border-radius: 14px;
+  font-size: 12px; display: flex; align-items: center; gap: 4px;
+}
+.cat-badge .amt { color: var(--text2); margin-left: auto; }
+
+/* expenses */
+.expense-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.expense-item:last-child { border-bottom: none; }
+.expense-dia { font-size: 13px; color: var(--text2); min-width: 24px; }
+.expense-info { flex: 1; min-width: 0; }
+.expense-desc { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.expense-cat { font-size: 11px; color: var(--text2); }
+.expense-amt { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.expense-roll { font-size: 11px; color: var(--orange); margin-left: 4px; }
+.expense-actions { display: flex; gap: 4px; }
+.expense-actions button {
+  background: none; border: none; color: var(--text2); cursor: pointer;
+  font-size: 16px; padding: 2px;
+}
+.expense-actions button:active { opacity: .6; }
+
+/* add btn */
+.add-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px; margin-top: 8px;
+  background: var(--accent); color: #000; border: none; border-radius: var(--radius);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.add-btn:active { opacity: .8; }
+
+/* modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.7); align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border-radius: var(--radius) var(--radius) 0 0;
+  width: 100%; max-width: 480px; max-height: 90dvh; overflow-y: auto;
+  padding: 20px 16px; animation: slideUp .2s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal h2 { font-size: 16px; margin-bottom: 14px; }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.form-group input, .form-group select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface2); color: var(--text); font-size: 14px;
+}
+.form-group select { appearance: auto; }
+.form-row { display: flex; gap: 8px; }
+.form-row .form-group { flex: 1; }
+.form-actions { display: flex; gap: 8px; margin-top: 16px; }
+.form-actions button {
+  flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-primary { background: var(--accent); color: #000; border: none; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-primary:active, .btn-secondary:active { opacity: .8; }
+
+/* toggle */
+.toggle-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.toggle-wrap label { font-size: 13px; color: var(--text2); }
+.switch { position: relative; width: 40px; height: 22px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute; inset: 0; cursor: pointer; background: var(--surface2); border-radius: 22px; transition: .2s;
+}
+.switch .slider::before {
+  content: ""; position: absolute; left: 3px; bottom: 3px; width: 16px; height: 16px;
+  background: var(--text); border-radius: 50%; transition: .2s;
+}
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tab {
+  flex: 1; text-align: center; padding: 8px; border-radius: 8px;
+  font-size: 13px; cursor: pointer; color: var(--text2);
+}
+.tab.active { background: var(--surface2); color: var(--text); font-weight: 600; }
+
+/* chart */
+.chart-wrap { position: relative; height: 200px; }
+.chart-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chart-filter label { font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.chart-filter input { accent-color: var(--accent); }
+
+/* empty */
+.empty { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0; }
+
+/* settings */
+.settings-list { display: flex; flex-direction: column; gap: 4px; }
+.cat-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.cat-row:last-child { border-bottom: none; }
+.cat-row .name { font-size: 14px; }
+.cat-row button {
+  background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 4px;
+}
+.add-cat-form { display: flex; gap: 6px; margin-top: 8px; }
+.add-cat-form input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 13px; }
+.add-cat-form button { padding: 8px 12px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="header">
+    <h1>monthTrack</h1>
+    <div class="month-nav">
+      <button onclick="navMonth(-1)">&#8249;</button>
+      <span id="monthLabel"></span>
+      <button onclick="navMonth(1)">&#8250;</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="month" onclick="switchTab('month')">Mês</div>
+    <div class="tab" data-tab="history" onclick="switchTab('history')">Histórico</div>
+    <div class="tab" data-tab="settings" onclick="switchTab('settings')">Categorias</div>
+  </div>
+
+  <div id="tab-month">
+    <div class="card">
+      <h3>Resumo</h3>
+      <div class="summary-grid">
+        <div class="summary-item"><div class="value" id="budgetVal">-</div><div class="label">Budget</div></div>
+        <div class="summary-item"><div class="value" id="spentVal">-</div><div class="label">Gasto</div></div>
+        <div class="summary-item"><div class="value" id="leftVal">-</div><div class="label">Restante</div></div>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="card" id="catBreakdownCard">
+      <h3>Por categoria</h3>
+      <div class="cat-list" id="catBreakdown"></div>
+    </div>
+
+    <div class="card">
+      <h3>Despesas</h3>
+      <div id="expenseList"></div>
+      <button class="add-btn" onclick="openExpenseForm()">+ Nova despesa</button>
+    </div>
+  </div>
+
+  <div id="tab-history" style="display:none">
+    <div class="card">
+      <h3>Gastos mensais</h3>
+      <div class="chart-filter" id="chartFilter"></div>
+      <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+    </div>
+  </div>
+
+  <div id="tab-settings" style="display:none">
+    <div class="card">
+      <h3>Categorias</h3>
+      <div class="settings-list" id="catSettingsList"></div>
+      <div class="add-cat-form">
+        <input id="newCatName" placeholder="Nome da categoria">
+        <input id="newCatEmoji" placeholder="Emoji" style="max-width:60px">
+        <button onclick="addCategory()">+</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="expenseModal">
+  <div class="modal">
+    <h2 id="expenseModalTitle">Nova despesa</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Dia</label>
+        <input type="number" id="formDia" min="1" max="31" value="1">
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Valor (R$)</label>
+        <input type="number" step="0.01" id="formAmount" placeholder="0,00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <input id="formDesc" placeholder="Do que foi?">
+    </div>
+    <div class="form-group">
+      <label>Categoria</label>
+      <select id="formCategory"></select>
+    </div>
+    <div class="toggle-wrap">
+      <label class="switch">
+        <input type="checkbox" id="formRollover">
+        <span class="slider"></span>
+      </label>
+      <label>Despesa especial (rollover)</label>
+    </div>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="closeExpenseForm()">Cancelar</button>
+      <button class="btn-primary" id="expenseFormSubmit" onclick="saveExpense()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="budgetModal">
+  <div class="modal">
+    <h2>Alterar budget</h2>
+    <div class="form-group">
+      <label>Budget do mês (R$)</label>
+      <input type="number" step="0.01" id="formBudget" placeholder="0,00">
+    </div>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="closeBudgetForm()">Cancelar</button>
+      <button class="btn-primary" onclick="saveBudget()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let state = { year: 2026, month: 1, editingDia: null, chart: null };
+let categories = [];
+
+async function api(method, path, body) {
+  const opts = { method, headers: {'Accept':'application/json'} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+async function loadCategories() {
+  categories = await api('GET','/api/categories') || [];
+}
+
+async function loadMonth() {
+  const data = await api('GET',`/api/months/${state.year}/${state.month}`);
+  renderMonth(data);
+}
+
+async function loadDashboard() {
+  const data = await api('GET',`/api/months/${state.year}/${state.month}/dashboard`);
+  if (!data) return;
+  document.getElementById('budgetVal').textContent = data.budget.toFixed(2);
+  document.getElementById('spentVal').textContent = data.total_spent.toFixed(2);
+  document.getElementById('leftVal').textContent = Math.max(0, data.remaining).toFixed(2);
+
+  const pct = data.budget > 0 ? Math.min(100, data.total_spent / data.budget * 100) : 0;
+  const bar = document.getElementById('barFill');
+  bar.style.width = pct + '%';
+  bar.className = 'bar-fill' + (pct > 100 ? ' bar-over' : '');
+
+  document.getElementById('budgetVal').onclick = () => openBudgetForm(data.budget);
+  document.getElementById('budgetVal').style.cursor = 'pointer';
+
+  const cats = {};
+  for (const e of data.expenses) {
+    if (!e.rollover) { cats[e.category] = (cats[e.category]||0) + e.amount; }
+  }
+  const breakEl = document.getElementById('catBreakdown');
+  if (Object.keys(cats).length === 0) {
+    breakEl.innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
+  } else {
+    breakEl.innerHTML = Object.entries(cats).map(([c,a]) =>
+      `<span class="cat-badge">${c} <span class="amt">R$${a.toFixed(2)}</span></span>`
+    ).join('');
+  }
+}
+
+function renderMonth(data) {
+  if (!data) {
+    document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+    document.getElementById('expenseList').innerHTML = '<div class="empty">Mês vazio. Defina um budget.</div>';
+    return;
+  }
+  document.getElementById('monthLabel').textContent = `${MONTHS[data.month-1]} ${data.year}`;
+  if (data.expenses.length === 0) {
+    document.getElementById('expenseList').innerHTML = '<div class="empty">Nenhuma despesa ainda</div>';
+  } else {
+    document.getElementById('expenseList').innerHTML = data.expenses.map(e =>
+      `<div class="expense-item">
+        <span class="expense-dia">${e.dia}</span>
+        <div class="expense-info">
+          <div class="expense-desc">${esc(e.description)}</div>
+          <div class="expense-cat">${esc(e.category)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="expense-amt">R$${e.amount.toFixed(2)}</div>
+          ${e.rollover ? '<span class="expense-roll">rollover</span>' : ''}
+        </div>
+        <div class="expense-actions">
+          <button onclick="editExpense(${e.dia},'${esc(e.description)}','${esc(e.category)}',${e.amount},${e.rollover})">&#9998;</button>
+          <button onclick="deleteExpense(${e.dia})">&#10005;</button>
+        </div>
+      </div>`
+    ).join('');
+  }
+  loadDashboard();
+}
+
+function esc(s) { return s.replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+async function navMonth(delta) {
+  state.month += delta;
+  if (state.month > 12) { state.month = 1; state.year++; }
+  if (state.month < 1) { state.month = 12; state.year--; }
+  loadMonth();
+}
+
+async function openBudgetForm(currentBudget) {
+  document.getElementById('formBudget').value = currentBudget || 0;
+  document.getElementById('budgetModal').classList.add('open');
+}
+
+function closeBudgetForm() {
+  document.getElementById('budgetModal').classList.remove('open');
+}
+
+async function saveBudget() {
+  const val = parseFloat(document.getElementById('formBudget').value);
+  if (isNaN(val) || val < 0) return;
+  await api('PUT',`/api/months/${state.year}/${state.month}/budget`, {budget: val});
+  closeBudgetForm();
+  loadMonth();
+}
+
+async function openExpenseForm(dia, desc, cat, amount, rollover) {
+  state.editingDia = dia || null;
+  document.getElementById('expenseModalTitle').textContent = dia ? 'Editar despesa' : 'Nova despesa';
+  document.getElementById('formDia').value = dia || '';
+  document.getElementById('formDesc').value = desc || '';
+  document.getElementById('formAmount').value = amount || '';
+  document.getElementById('formRollover').checked = !!rollover;
+  const sel = document.getElementById('formCategory');
+  sel.innerHTML = categories.map(c => `<option value="${c.name}"${cat===c.name?' selected':''}>${c.emoji||''} ${c.name}</option>`).join('');
+  document.getElementById('expenseModal').classList.add('open');
+}
+
+function closeExpenseForm() {
+  document.getElementById('expenseModal').classList.remove('open');
+  state.editingDia = null;
+}
+
+async function saveExpense() {
+  const body = {
+    dia: parseInt(document.getElementById('formDia').value),
+    description: document.getElementById('formDesc').value.trim(),
+    category: document.getElementById('formCategory').value,
+    amount: parseFloat(document.getElementById('formAmount').value),
+    rollover: document.getElementById('formRollover').checked,
+  };
+  if (!body.dia || !body.description || !body.category || isNaN(body.amount) || body.amount <= 0) return;
+
+  if (state.editingDia) {
+    await api('PUT',`/api/months/${state.year}/${state.month}/expenses/${state.editingDia}`, body);
+  } else {
+    await api('POST',`/api/months/${state.year}/${state.month}/expenses`, body);
+  }
+  closeExpenseForm();
+  loadMonth();
+}
+
+function editExpense(dia, desc, cat, amount, rollover) {
+  openExpenseForm(dia, desc, cat, amount, rollover);
+}
+
+async function deleteExpense(dia) {
+  if (!confirm('Remover esta despesa?')) return;
+  await api('DELETE',`/api/months/${state.year}/${state.month}/expenses/${dia}`);
+  loadMonth();
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  ['month','history','settings'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === name ? '' : 'none';
+  });
+  if (name === 'history') loadHistory();
+  if (name === 'settings') loadSettings();
+}
+
+async function loadHistory() {
+  const selected = [...document.querySelectorAll('#chartFilter input:checked')].map(i => i.value);
+  const params = selected.length > 0 ? '?categories=' + selected.join(',') : '';
+  const data = await api('GET', '/api/history' + params) || [];
+  const cats = await api('GET', '/api/categories') || [];
+
+  const filterEl = document.getElementById('chartFilter');
+  filterEl.innerHTML = cats.map(c =>
+    `<label><input type="checkbox" value="${c.name}" onchange="loadHistory()" ${selected.includes(c.name)?'checked':''}> ${c.emoji||''} ${c.name}</label>`
+  ).join('');
+
+  const labels = data.map(p => `${MONTHS[p.month-1].slice(0,3)} ${p.year}`);
+  const spent = data.map(p => p.total_spent);
+  const budget = data.map(p => p.budget);
+
+  if (state.chart) { state.chart.destroy(); }
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  state.chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Gasto', data: spent, backgroundColor: '#4fc3f788', borderColor: '#4fc3f7', borderWidth: 1 },
+        { label: 'Budget', data: budget, backgroundColor: '#66bb6a44', borderColor: '#66bb6a', borderWidth: 1, type: 'line', tension: .2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#a0a0a0' } } },
+      scales: {
+        x: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } },
+        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }
+      }
+    }
+  });
+}
+
+async function loadSettings() {
+  const cats = await api('GET', '/api/categories') || [];
+  const el = document.getElementById('catSettingsList');
+  el.innerHTML = cats.map(c =>
+    `<div class="cat-row">
+      <span class="name">${c.emoji||''} ${c.name}</span>
+      <button onclick="deleteCategory('${c.name}')">Remover</button>
+    </div>`
+  ).join('');
+}
+
+async function addCategory() {
+  const name = document.getElementById('newCatName').value.trim();
+  const emoji = document.getElementById('newCatEmoji').value.trim();
+  if (!name) return;
+  await api('POST','/api/categories', {name, emoji: emoji||null});
+  document.getElementById('newCatName').value = '';
+  document.getElementById('newCatEmoji').value = '';
+  loadCategories();
+  loadSettings();
+}
+
+async function deleteCategory(name) {
+  if (!confirm(`Remover categoria "${name}"?`)) return;
+  await api('DELETE', `/api/categories/${encodeURIComponent(name)}`);
+  loadCategories();
+  loadSettings();
+}
+
+async function init() {
+  const now = new Date();
+  state.year = now.getFullYear();
+  state.month = now.getMonth() + 1;
+  await loadCategories();
+  await loadMonth();
+}
+
+init();
+</script>
+</body>
+</html>
