@@ -314,9 +314,6 @@ async function loadDashboard() {
   bar.style.width = pct + '%';
   bar.className = 'bar-fill' + (pct > 100 ? ' bar-over' : '');
 
-  document.getElementById('budgetVal').onclick = () => openBudgetForm(data.budget);
-  document.getElementById('budgetVal').style.cursor = 'pointer';
-
   const cats = {};
   for (const e of data.expenses) {
     if (!e.rollover) { cats[e.category] = (cats[e.category]||0) + e.amount; }
@@ -333,8 +330,10 @@ async function loadDashboard() {
 
 function renderMonth(data) {
   document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+  document.getElementById('budgetVal').onclick = () => openBudgetForm(data ? data.budget : 0);
+  document.getElementById('budgetVal').style.cursor = 'pointer';
   if (!data) {
-    document.getElementById('expenseList').innerHTML = '<div class="empty">Mês vazio. Defina um budget.</div>';
+    document.getElementById('expenseList').innerHTML = '<div class="empty">Clique no valor do budget acima para definir o orçamento do mês</div>';
     document.getElementById('budgetVal').textContent = '0,00';
     document.getElementById('spentVal').textContent = '0,00';
     document.getElementById('leftVal').textContent = '0,00';

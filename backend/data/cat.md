@@ -1,0 +1,8 @@
+- Gym
+- Lazer
+- Presentes
+- Restaurante
+- Mercado
+- Casa
+- Pessoal
+- Saúde
