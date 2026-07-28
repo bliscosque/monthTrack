@@ -27,7 +27,7 @@ def test_put_budget_updates_month_file(client, data_dir):
     get_resp = client.get("/api/months/2026/1")
     assert get_resp.json()["budget"] == 5000.0
 
-    text = (data_dir / "2026" / "1.md").read_text(encoding="utf-8")
+    text = (data_dir / "2026" / "jan.md").read_text(encoding="utf-8")
     assert "Budget: 5000" in text
 
 
@@ -36,8 +36,8 @@ def test_put_budget_creates_month_if_not_exists(client, data_dir):
     assert resp.status_code == 200
     assert resp.json()["budget"] == 2000.0
 
-    assert (data_dir / "2026" / "3.md").exists()
-    text = (data_dir / "2026" / "3.md").read_text(encoding="utf-8")
+    assert (data_dir / "2026" / "mar.md").exists()
+    text = (data_dir / "2026" / "mar.md").read_text(encoding="utf-8")
     assert "Budget: 2000" in text
 
 

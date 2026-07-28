@@ -3,8 +3,13 @@ from pathlib import Path
 from monthtrack.models import MonthData, Expense, Category
 
 
+MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun",
+               "jul", "ago", "set", "out", "nov", "dez"]
+
+
 def _month_path(data_dir: str, year: int, month: int) -> Path:
-    return Path(data_dir) / str(year) / f"{month}.md"
+    name = MONTH_NAMES[month - 1]
+    return Path(data_dir) / str(year) / f"{name}.md"
 
 
 def parse_month(data_dir: str, year: int, month: int) -> MonthData | None:
@@ -199,6 +204,13 @@ def delete_category(data_dir: str, name: str) -> bool:
     return True
 
 
+def _month_from_name(name: str) -> int | None:
+    try:
+        return MONTH_NAMES.index(name.lower()) + 1
+    except ValueError:
+        return None
+
+
 def list_months(data_dir: str) -> list[dict]:
     months: list[dict] = []
     base = Path(data_dir)
@@ -209,7 +221,10 @@ def list_months(data_dir: str) -> list[dict]:
             continue
         year = int(year_dir.name)
         for f in sorted(year_dir.glob("*.md")):
-            month = int(f.stem)
+            stem = f.stem
+            month = _month_from_name(stem)
+            if month is None:
+                continue
             data = parse_month(data_dir, year, month)
             if data:
                 months.append({"year": year, "month": month})

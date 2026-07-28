@@ -10,7 +10,7 @@ def data_dir(tmp_path: Path) -> Path:
     d = tmp_path / "data"
     d.mkdir()
     (d / "2026").mkdir()
-    (d / "2026" / "1.md").write_text(
+    (d / "2026" / "jan.md").write_text(
         "Budget: 3000\n\n"
         "| Dia | Description | Category | Amount | Rollover |\n"
         "|-----|-------------|----------|--------|----------|\n"
