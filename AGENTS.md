@@ -14,9 +14,10 @@ Single-context layout. See `docs/agents/domain.md`.
 
 ## Session state (Jul 2026)
 
-Backend (FastAPI) and frontend (SPA) implemented. 15 tests pass.
+Backend (FastAPI) and frontend (SPA) implemented. 34 tests pass.
 Data stored as `.md` files in `backend/data/`. Run with:
 ```
 cd backend && .venv/bin/uvicorn monthtrack.app:app --reload
 ```
-See `.scratch/monthTrack/spec.md` for the full spec.
+Set `APP_PASSWORD` in `.env` for auth.
+See `.scratch/monthTrack/spec.md` and `.scratch/monthTrack/notas-e-caixas/spec.md` for specs.
