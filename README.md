@@ -62,9 +62,9 @@ rollover button in the UI to split the expense when ready.
 | PUT | `/api/months/{year}/{month}/budget` | Set budget |
 | PUT | `/api/months/{year}/{month}/notes` | Set notes |
 | POST | `/api/months/{year}/{month}/expenses` | Add expense |
-| PUT | `/api/months/{year}/{month}/expenses/{dia}` | Edit expense |
-| DELETE | `/api/months/{year}/{month}/expenses/{dia}` | Delete expense |
-| POST | `/api/months/{year}/{month}/expenses/{dia}/rollover` | Execute rollover |
+| PUT | `/api/months/{year}/{month}/expenses/{idx}` | Edit expense |
+| DELETE | `/api/months/{year}/{month}/expenses/{idx}` | Delete expense |
+| POST | `/api/months/{year}/{month}/expenses/{idx}/rollover` | Execute rollover |
 | GET | `/api/months/{year}/{month}/dashboard` | Dashboard summary |
 | GET | `/api/history?categories=` | Historical spending |
 | GET/POST/PUT/DELETE | `/api/categories` | Category CRUD |

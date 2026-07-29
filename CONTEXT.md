@@ -27,6 +27,8 @@ fits within the remaining budget stays, and the excess is carried over as a new
 expense in the following month (same category, same description, `dia=0`).
 After rollover, the field stores the original total amount (e.g. `"200.00"`)
 for historical reference.
+The remaining budget accounts for both expenses and positive caixa values
+(`remaining = budget − expenses − positive_caixas`).
 _Avoid_: Despesa parcelada, conta rotativa, auto-rollover
 
 **Notes (Notas)**:

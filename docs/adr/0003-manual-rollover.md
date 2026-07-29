@@ -42,7 +42,8 @@ in that month) and `rollover="x"` (eligible for further manual rollover).
 - `Expense.rollover` changes from `bool` to `str`.
 - `Expense.dia` validation relaxes to allow `0`.
 - `POST /api/months/{y}/{m}/expenses` no longer splits automatically.
-- New endpoint `POST /api/months/{y}/{m}/expenses/{dia}/rollover`.
+- New endpoint `POST /api/months/{y}/{m}/expenses/{idx}/rollover` (expenses identified by array index, not `dia`, to avoid ambiguity when multiple expenses share the same day).
+- `MonthData.total_spent` includes positive caixa values, so `remaining` (budget − total_spent) reflects the full monthly outlay and the rollover cap accounts for caixa spending.
 - Frontend gains a rollover button; rollover badge shows the original amount
   when present.
 - Existing tests for auto-rollover need to be rewritten.
