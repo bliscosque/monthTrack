@@ -405,7 +405,7 @@ body {
 
 <script>
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let state = { year: 2026, month: 1, editingDia: null, chart: null };
+let state = { year: 2026, month: 1, editingIdx: null, chart: null };
 let categories = [];
 
 function getToken() { return sessionStorage.getItem('token'); }
@@ -519,14 +519,14 @@ async function renderMonth(data) {
   if (data.expenses.length === 0) {
     document.getElementById('expenseList').innerHTML = '<div class="empty">Nenhuma despesa ainda</div>';
   } else {
-    document.getElementById('expenseList').innerHTML = data.expenses.map(e => {
+    document.getElementById('expenseList').innerHTML = data.expenses.map((e, idx) => {
       const rollBadge = e.rollover === 'x'
         ? '<span class="expense-roll">rollover</span>'
         : e.rollover
           ? `<span class="expense-roll">orig: R$${parseFloat(e.rollover).toFixed(2)}</span>`
           : '';
       const rollBtn = e.rollover === 'x'
-        ? `<button class="roll-btn" onclick="rolloverExpense(${e.dia})">&#10132;</button>`
+        ? `<button class="roll-btn" onclick="rolloverExpense(${idx})">&#10132;</button>`
         : '';
       return `<div class="expense-item">
         <span class="expense-dia">${e.dia}</span>
@@ -540,8 +540,8 @@ async function renderMonth(data) {
         </div>
         <div class="expense-actions">
           ${rollBtn}
-          <button onclick="editExpense(${e.dia},'${esc(e.description)}','${esc(e.category)}',${e.amount},'${e.rollover}')">&#9998;</button>
-          <button onclick="deleteExpense(${e.dia})">&#10005;</button>
+          <button onclick="editExpense(${idx},'${esc(e.description)}','${esc(e.category)}',${e.amount},'${e.rollover}',${e.dia})">&#9998;</button>
+          <button onclick="deleteExpense(${idx})">&#10005;</button>
         </div>
       </div>`;
     }).join('');
@@ -576,9 +576,9 @@ async function saveBudget() {
   loadMonth();
 }
 
-async function openExpenseForm(dia, desc, cat, amount, rollover) {
-  state.editingDia = dia || null;
-  document.getElementById('expenseModalTitle').textContent = dia ? 'Editar despesa' : 'Nova despesa';
+async function openExpenseForm(idx, desc, cat, amount, rollover, dia) {
+  state.editingIdx = idx != null ? idx : null;
+  document.getElementById('expenseModalTitle').textContent = idx != null ? 'Editar despesa' : 'Nova despesa';
   document.getElementById('formDia').value = dia || '';
   document.getElementById('formDesc').value = desc || '';
   document.getElementById('formAmount').value = amount || '';
@@ -588,14 +588,14 @@ async function openExpenseForm(dia, desc, cat, amount, rollover) {
   document.getElementById('expenseModal').classList.add('open');
 }
 
-async function rolloverExpense(dia) {
-  await api('POST', `/api/months/${state.year}/${state.month}/expenses/${dia}/rollover`);
+async function rolloverExpense(idx) {
+  await api('POST', `/api/months/${state.year}/${state.month}/expenses/${idx}/rollover`);
   loadMonth();
 }
 
 function closeExpenseForm() {
   document.getElementById('expenseModal').classList.remove('open');
-  state.editingDia = null;
+  state.editingIdx = null;
 }
 
 async function saveExpense() {
@@ -608,8 +608,8 @@ async function saveExpense() {
   };
   if (!body.dia || !body.description || !body.category || isNaN(body.amount) || body.amount <= 0) return;
 
-  if (state.editingDia) {
-    await api('PUT',`/api/months/${state.year}/${state.month}/expenses/${state.editingDia}`, body);
+  if (state.editingIdx != null) {
+    await api('PUT',`/api/months/${state.year}/${state.month}/expenses/${state.editingIdx}`, body);
   } else {
     await api('POST',`/api/months/${state.year}/${state.month}/expenses`, body);
   }
@@ -617,13 +617,13 @@ async function saveExpense() {
   loadMonth();
 }
 
-function editExpense(dia, desc, cat, amount, rollover) {
-  openExpenseForm(dia, desc, cat, amount, rollover);
+function editExpense(idx, desc, cat, amount, rollover, dia) {
+  openExpenseForm(idx, desc, cat, amount, rollover, dia);
 }
 
-async function deleteExpense(dia) {
+async function deleteExpense(idx) {
   if (!confirm('Remover esta despesa?')) return;
-  await api('DELETE',`/api/months/${state.year}/${state.month}/expenses/${dia}`);
+  await api('DELETE',`/api/months/${state.year}/${state.month}/expenses/${idx}`);
   loadMonth();
 }
 

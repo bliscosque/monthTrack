@@ -83,7 +83,7 @@ def test_rollover_manual(client, data_dir):
         "amount": 200.0, "rollover": True,
     })
 
-    resp = client.post("/api/months/2026/1/expenses/20/rollover")
+    resp = client.post("/api/months/2026/1/expenses/2/rollover")
     assert resp.status_code == 200
     results = resp.json()
     assert len(results) == 2
@@ -107,7 +107,7 @@ def test_rollover_manual_remaining_zero(client, data_dir):
         "amount": 200.0, "rollover": True,
     })
 
-    resp = client.post("/api/months/2026/1/expenses/20/rollover")
+    resp = client.post("/api/months/2026/1/expenses/2/rollover")
     assert resp.status_code == 200
     original, overflow = resp.json()
     assert original["amount"] == 0.0
@@ -120,7 +120,7 @@ def test_rollover_manual_not_eligible_returns_400(client, data_dir):
     client.post("/api/months/2026/1/expenses", json={
         "dia": 20, "description": "Normal", "category": "Casa", "amount": 100.0,
     })
-    resp = client.post("/api/months/2026/1/expenses/20/rollover")
+    resp = client.post("/api/months/2026/1/expenses/2/rollover")
     assert resp.status_code == 400
 
 
@@ -130,8 +130,8 @@ def test_rollover_manual_already_rolled_returns_400(client, data_dir):
         "dia": 20, "description": "Compra grande", "category": "Casa",
         "amount": 200.0, "rollover": True,
     })
-    client.post("/api/months/2026/1/expenses/20/rollover")
-    resp = client.post("/api/months/2026/1/expenses/20/rollover")
+    client.post("/api/months/2026/1/expenses/2/rollover")
+    resp = client.post("/api/months/2026/1/expenses/2/rollover")
     assert resp.status_code == 400
 
 
@@ -141,7 +141,7 @@ def test_rollover_manual_wraps_year(client, data_dir):
         "dia": 31, "description": "Fim de ano", "category": "Casa",
         "amount": 200.0, "rollover": True,
     })
-    resp = client.post("/api/months/2026/12/expenses/31/rollover")
+    resp = client.post("/api/months/2026/12/expenses/0/rollover")
     assert resp.status_code == 200
     _, overflow = resp.json()
 
@@ -171,7 +171,7 @@ def test_put_expense_updates_expense(data_dir, client):
     })
     expense = resp.json()
     edit_resp = client.put(
-        f"/api/months/2026/1/expenses/{expense['dia']}",
+        f"/api/months/2026/1/expenses/2",
         json={"description": "Teste editado", "amount": 150},
     )
     assert edit_resp.status_code == 200
@@ -184,11 +184,11 @@ def test_put_expense_toggles_rollover(data_dir, client):
     client.post("/api/months/2026/1/expenses", json={
         "dia": 1, "description": "Teste", "category": "Casa", "amount": 100,
     })
-    edit_resp = client.put("/api/months/2026/1/expenses/1", json={"rollover": True})
+    edit_resp = client.put("/api/months/2026/1/expenses/2", json={"rollover": True})
     assert edit_resp.status_code == 200
     assert edit_resp.json()["rollover"] == "x"
 
-    edit_resp = client.put("/api/months/2026/1/expenses/1", json={"rollover": False})
+    edit_resp = client.put("/api/months/2026/1/expenses/2", json={"rollover": False})
     assert edit_resp.status_code == 200
     assert edit_resp.json()["rollover"] == ""
 

@@ -105,13 +105,6 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
     )
 
 
-def _find_expense_index(expenses: list[Expense], dia: int) -> int | None:
-    for i, e in enumerate(expenses):
-        if e.dia == dia:
-            return i
-    return None
-
-
 def add_expense(data_dir: str, year: int, month: int, expense: Expense) -> Expense:
     data = parse_month(data_dir, year, month)
     if data is None:
@@ -121,18 +114,17 @@ def add_expense(data_dir: str, year: int, month: int, expense: Expense) -> Expen
     return expense
 
 
-def execute_rollover(data_dir: str, year: int, month: int, dia: int) -> list[Expense]:
+def execute_rollover(data_dir: str, year: int, month: int, idx: int) -> list[Expense]:
     data = parse_month(data_dir, year, month)
     if data is None:
         raise FileNotFoundError(f"Month {year}/{month} not found")
 
-    idx = _find_expense_index(data.expenses, dia)
-    if idx is None:
-        raise FileNotFoundError(f"Expense on day {dia} not found")
+    if idx < 0 or idx >= len(data.expenses):
+        raise FileNotFoundError(f"Expense at index {idx} not found")
 
     expense = data.expenses[idx]
     if expense.rollover != "x":
-        raise ValueError(f"Expense on day {dia} is not eligible for rollover")
+        raise ValueError(f"Expense at index {idx} is not eligible for rollover")
 
     original_amount = expense.amount
     room = max(0, data.remaining + original_amount)
@@ -160,13 +152,12 @@ def execute_rollover(data_dir: str, year: int, month: int, dia: int) -> list[Exp
     return [data.expenses[idx], overflow_expense]
 
 
-def update_expense(data_dir: str, year: int, month: int, dia: int,
+def update_expense(data_dir: str, year: int, month: int, idx: int,
                    updates: dict) -> Expense | None:
     data = parse_month(data_dir, year, month)
     if data is None:
         return None
-    idx = _find_expense_index(data.expenses, dia)
-    if idx is None:
+    if idx < 0 or idx >= len(data.expenses):
         return None
 
     current = data.expenses[idx]
@@ -184,12 +175,11 @@ def update_expense(data_dir: str, year: int, month: int, dia: int,
     return updated
 
 
-def delete_expense(data_dir: str, year: int, month: int, dia: int) -> bool:
+def delete_expense(data_dir: str, year: int, month: int, idx: int) -> bool:
     data = parse_month(data_dir, year, month)
     if data is None:
         return False
-    idx = _find_expense_index(data.expenses, dia)
-    if idx is None:
+    if idx < 0 or idx >= len(data.expenses):
         return False
     data.expenses.pop(idx)
     write_month(data_dir, data)

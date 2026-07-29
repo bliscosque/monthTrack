@@ -148,23 +148,23 @@ def create_app(data_dir: str = "data") -> FastAPI:
             raise HTTPException(status_code=404, detail="Month not found")
         return expense.model_dump()
 
-    @app.put("/api/months/{year}/{month}/expenses/{dia}")
-    def edit_expense(year: int, month: int, dia: int, body: ExpenseUpdate, _=Depends(require_auth)):
-        result = update_expense(app.state.data_dir, year, month, dia, body.model_dump(exclude_none=True))
+    @app.put("/api/months/{year}/{month}/expenses/{idx}")
+    def edit_expense(year: int, month: int, idx: int, body: ExpenseUpdate, _=Depends(require_auth)):
+        result = update_expense(app.state.data_dir, year, month, idx, body.model_dump(exclude_none=True))
         if result is None:
             raise HTTPException(status_code=404, detail="Expense not found")
         return result.model_dump()
 
-    @app.delete("/api/months/{year}/{month}/expenses/{dia}", status_code=204)
-    def remove_expense(year: int, month: int, dia: int, _=Depends(require_auth)):
-        ok = delete_expense(app.state.data_dir, year, month, dia)
+    @app.delete("/api/months/{year}/{month}/expenses/{idx}", status_code=204)
+    def remove_expense(year: int, month: int, idx: int, _=Depends(require_auth)):
+        ok = delete_expense(app.state.data_dir, year, month, idx)
         if not ok:
             raise HTTPException(status_code=404, detail="Expense not found")
 
-    @app.post("/api/months/{year}/{month}/expenses/{dia}/rollover")
-    def rollover_expense(year: int, month: int, dia: int, _=Depends(require_auth)):
+    @app.post("/api/months/{year}/{month}/expenses/{idx}/rollover")
+    def rollover_expense(year: int, month: int, idx: int, _=Depends(require_auth)):
         try:
-            results = execute_rollover(app.state.data_dir, year, month, dia)
+            results = execute_rollover(app.state.data_dir, year, month, idx)
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Expense not found")
         except ValueError:
