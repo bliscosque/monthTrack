@@ -608,7 +608,7 @@ async function saveExpense() {
     amount: parseFloat(document.getElementById('formAmount').value),
     rollover: document.getElementById('formRollover').checked,
   };
-  if (!body.dia || !body.description || !body.category || isNaN(body.amount) || body.amount <= 0) return;
+  if (isNaN(body.dia) || body.dia < 0 || !body.description || !body.category || isNaN(body.amount) || body.amount <= 0) return;
 
   if (state.editingIdx != null) {
     await api('PUT',`/api/months/${state.year}/${state.month}/expenses/${state.editingIdx}`, body);
