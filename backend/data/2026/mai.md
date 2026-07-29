@@ -1,5 +1,4 @@
-Budget: 5000.0
+Budget: 10.0
 
 | Dia | Description | Category | Amount | Rollover |
 |-----|-------------|----------|--------|----------|
-| 1 | teste | Gym | 10.00 | |

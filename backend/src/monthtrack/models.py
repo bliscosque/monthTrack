@@ -16,11 +16,25 @@ class Expense(BaseModel):
         return v
 
 
+class CaixaItem(BaseModel):
+    data: int = Field(ge=0, le=31)
+    tipo: str
+    valor: float
+
+
+class CaixaTipo(BaseModel):
+    tipo: str
+    nome: str = ""
+    emoji: str | None = None
+
+
 class MonthData(BaseModel):
     year: int = Field(ge=1970)
     month: int = Field(ge=1, le=12)
-    budget: float = Field(ge=0)
+    budget: float = Field(default=0, ge=0)
+    notes: str = ""
     expenses: list[Expense] = []
+    caixas: list[CaixaItem] = []
 
     @property
     def total_spent(self) -> float:

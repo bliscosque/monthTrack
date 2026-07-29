@@ -11,18 +11,42 @@ from pydantic import BaseModel
 from monthtrack.models import (
     MonthData, BudgetUpdate, ExpenseCreate, ExpenseUpdate,
     CategoryCreate, CategoryUpdate, DashboardMonth, HistoricalPoint,
-    Expense, Category,
+    Expense, Category, CaixaItem, CaixaTipo,
 )
 from monthtrack.security import create_access_token, get_password_hash, require_auth, verify_password
 from monthtrack.storage import (
     parse_month, write_month, add_expense, update_expense, delete_expense,
     parse_categories, add_category, update_category, delete_category,
-    list_months, execute_rollover,
+    list_months, execute_rollover, update_notes,
+    add_caixa_item, update_caixa_item, delete_caixa_item,
+    get_caixa_agregado, get_caixa_saldos,
+    parse_caixas_tipos, update_caixa_tipo,
 )
 
 
 class LoginRequest(BaseModel):
     password: str
+
+
+class NotesBody(BaseModel):
+    notes: str
+
+
+class CaixaItemCreate(BaseModel):
+    data: int
+    tipo: str
+    valor: float
+
+
+class CaixaItemUpdate(BaseModel):
+    data: int | None = None
+    tipo: str | None = None
+    valor: float | None = None
+
+
+class CaixaTipoUpdate(BaseModel):
+    nome: str | None = None
+    emoji: str | None = None
 
 
 def _init_password() -> str:
@@ -52,6 +76,9 @@ def create_app(data_dir: str = "data") -> FastAPI:
                 "Mercado", "Casa", "Pessoal", "Saúde",
             ]
             cat_path.write_text("\n".join(f"- {c}" for c in initial) + "\n", encoding="utf-8")
+        caixas_path = Path(data_dir) / "caixas.md"
+        if not caixas_path.exists():
+            caixas_path.write_text("- CP 🏦\n- CC 💳\n- CB 🎁\n", encoding="utf-8")
         yield
 
     app = FastAPI(title="monthTrack", lifespan=lifespan)
@@ -104,6 +131,11 @@ def create_app(data_dir: str = "data") -> FastAPI:
         write_month(app.state.data_dir, data)
         return data.model_dump()
 
+    @app.put("/api/months/{year}/{month}/notes")
+    def set_notes(year: int, month: int, body: NotesBody, _=Depends(require_auth)):
+        data = update_notes(app.state.data_dir, year, month, body.notes)
+        return data.model_dump()
+
     @app.post("/api/months/{year}/{month}/expenses", status_code=201)
     def create_expense(year: int, month: int, body: ExpenseCreate, _=Depends(require_auth)):
         data = parse_month(app.state.data_dir, year, month)
@@ -138,6 +170,35 @@ def create_app(data_dir: str = "data") -> FastAPI:
         except ValueError:
             raise HTTPException(status_code=400, detail="Expense not eligible for rollover")
         return [r.model_dump() for r in results]
+
+    @app.post("/api/months/{year}/{month}/caixas", status_code=201)
+    def create_caixa_item(year: int, month: int, body: CaixaItemCreate, _=Depends(require_auth)):
+        try:
+            item = add_caixa_item(app.state.data_dir, year, month, CaixaItem(**body.model_dump()))
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Month not found")
+        return item.model_dump()
+
+    @app.put("/api/months/{year}/{month}/caixas/{idx}")
+    def edit_caixa_item(year: int, month: int, idx: int, body: CaixaItemUpdate, _=Depends(require_auth)):
+        result = update_caixa_item(app.state.data_dir, year, month, idx,
+                                   body.model_dump(exclude_none=True))
+        if result is None:
+            raise HTTPException(status_code=404, detail="Caixa item not found")
+        return result.model_dump()
+
+    @app.delete("/api/months/{year}/{month}/caixas/{idx}", status_code=204)
+    def remove_caixa_item(year: int, month: int, idx: int, _=Depends(require_auth)):
+        ok = delete_caixa_item(app.state.data_dir, year, month, idx)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Caixa item not found")
+
+    @app.get("/api/months/{year}/{month}/caixas/agregado")
+    def caixa_agregado(year: int, month: int, _=Depends(require_auth)):
+        try:
+            return get_caixa_agregado(app.state.data_dir, year, month)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Month not found")
 
     @app.get("/api/months/{year}/{month}/dashboard")
     def month_dashboard(year: int, month: int, _=Depends(require_auth)):
@@ -195,6 +256,22 @@ def create_app(data_dir: str = "data") -> FastAPI:
         ok = delete_category(app.state.data_dir, name)
         if not ok:
             raise HTTPException(status_code=404, detail="Category not found")
+
+    @app.get("/api/caixas/tipos")
+    def get_caixa_tipos(_=Depends(require_auth)):
+        tipos = parse_caixas_tipos(app.state.data_dir)
+        return [t.model_dump() for t in tipos]
+
+    @app.put("/api/caixas/tipos/{tipo}")
+    def edit_caixa_tipo(tipo: str, body: CaixaTipoUpdate, _=Depends(require_auth)):
+        result = update_caixa_tipo(app.state.data_dir, tipo, body.model_dump(exclude_none=True))
+        if result is None:
+            raise HTTPException(status_code=404, detail="Caixa type not found")
+        return result.model_dump()
+
+    @app.get("/api/caixas/saldos")
+    def caixa_saldos(tipo: str | None = None, _=Depends(require_auth)):
+        return get_caixa_saldos(app.state.data_dir, tipo)
 
     here = Path(__file__).resolve().parent.parent.parent
     frontend_dir = here / "frontend"

@@ -1,3 +1,6 @@
+import json
+
+
 def test_list_months(client):
     resp = client.get("/api/months")
     assert resp.status_code == 200
@@ -11,11 +14,16 @@ def test_get_month_returns_budget_and_expenses(client):
     assert data["year"] == 2026
     assert data["month"] == 1
     assert data["budget"] == 3000.0
+    assert data["notes"] == "Meu mês de janeiro"
     assert data["expenses"] == [
         {"dia": 5, "description": "Almoço no centro", "category": "Restaurante",
          "amount": 35.0, "rollover": ""},
         {"dia": 10, "description": "Inscrição anual", "category": "Saúde",
          "amount": 400.0, "rollover": "x"},
+    ]
+    assert data["caixas"] == [
+        {"data": 10, "tipo": "CP", "valor": 1000.0},
+        {"data": 15, "tipo": "CC", "valor": -50.0},
     ]
 
 
@@ -258,3 +266,149 @@ def test_history_filtered_by_category(client):
     assert resp.status_code == 200
     jan = next(p for p in resp.json() if p["year"] == 2026 and p["month"] == 1)
     assert jan["total_spent"] == 35.0
+
+
+# --- Notes ---
+
+def test_get_month_returns_notes(client):
+    resp = client.get("/api/months/2026/1")
+    assert resp.json()["notes"] == "Meu mês de janeiro"
+
+
+def test_put_notes_updates(client, data_dir):
+    resp = client.put("/api/months/2026/1/notes", json={"notes": "Nota atualizada"})
+    assert resp.status_code == 200
+    assert resp.json()["notes"] == "Nota atualizada"
+
+    get_resp = client.get("/api/months/2026/1")
+    assert get_resp.json()["notes"] == "Nota atualizada"
+
+    text = (data_dir / "2026" / "jan.md").read_text(encoding="utf-8")
+    assert "Notas: Nota atualizada" in text
+
+
+def test_put_notes_creates_month_if_not_exists(client, data_dir):
+    resp = client.put("/api/months/2026/4/notes", json={"notes": "Novo mês"})
+    assert resp.status_code == 200
+    assert resp.json()["notes"] == "Novo mês"
+
+
+# --- Caixa Types ---
+
+def test_list_caixa_tipos(client):
+    resp = client.get("/api/caixas/tipos")
+    assert resp.status_code == 200
+    tipos = resp.json()
+    assert len(tipos) == 3
+    cp = next(t for t in tipos if t["tipo"] == "CP")
+    assert cp["emoji"] == "🏦"
+
+
+def test_update_caixa_tipo(client, data_dir):
+    resp = client.put("/api/caixas/tipos/CP", json={"nome": "Caixa Principal", "emoji": "💰"})
+    assert resp.status_code == 200
+    assert resp.json()["emoji"] == "💰"
+
+    text = (data_dir / "caixas.md").read_text(encoding="utf-8")
+    assert "💰" in text
+
+
+# --- Caixa Items CRUD ---
+
+def test_add_caixa_item(client, data_dir):
+    resp = client.post("/api/months/2026/1/caixas", json={
+        "data": 20, "tipo": "CP", "valor": 500.0,
+    })
+    assert resp.status_code == 201
+    item = resp.json()
+    assert item["data"] == 20
+    assert item["tipo"] == "CP"
+    assert item["valor"] == 500.0
+
+    month = client.get("/api/months/2026/1").json()
+    assert len(month["caixas"]) == 3
+
+
+def test_add_negative_caixa_item(client):
+    resp = client.post("/api/months/2026/1/caixas", json={
+        "data": 25, "tipo": "CC", "valor": -100.0,
+    })
+    assert resp.status_code == 201
+
+
+def test_edit_caixa_item(client):
+    resp = client.put("/api/months/2026/1/caixas/0", json={"valor": 2000.0})
+    assert resp.status_code == 200
+    assert resp.json()["valor"] == 2000.0
+
+    month = client.get("/api/months/2026/1").json()
+    assert month["caixas"][0]["valor"] == 2000.0
+
+
+def test_delete_caixa_item(client):
+    resp = client.delete("/api/months/2026/1/caixas/1")
+    assert resp.status_code == 204
+
+    month = client.get("/api/months/2026/1").json()
+    assert len(month["caixas"]) == 1
+
+
+def test_caixa_item_out_of_range_returns_404(client):
+    resp = client.put("/api/months/2026/1/caixas/99", json={"valor": 100})
+    assert resp.status_code == 404
+
+    resp = client.delete("/api/months/2026/1/caixas/99")
+    assert resp.status_code == 404
+
+
+# --- Caixa Saldos ---
+
+def test_caixa_saldos_consolidado(client, data_dir):
+    client.put("/api/months/2026/2/budget", json={"budget": 1000})
+    client.post("/api/months/2026/2/caixas", json={
+        "data": 1, "tipo": "CP", "valor": 200.0,
+    })
+
+    resp = client.get("/api/caixas/saldos")
+    assert resp.status_code == 200
+    saldos = resp.json()
+    cp = next(s for s in saldos if s["tipo"] == "CP")
+    assert cp["saldo"] == 1200.0  # 1000 (fixture) + 200
+
+    cc = next(s for s in saldos if s["tipo"] == "CC")
+    assert cc["saldo"] == -50.0
+
+    cb = next(s for s in saldos if s["tipo"] == "CB")
+    assert cb["saldo"] == 0.0
+
+
+def test_caixa_saldos_por_mes(client, data_dir):
+    client.put("/api/months/2026/2/budget", json={"budget": 1000})
+    client.post("/api/months/2026/2/caixas", json={
+        "data": 1, "tipo": "CP", "valor": 200.0,
+    })
+
+    resp = client.get("/api/caixas/saldos?tipo=CP")
+    assert resp.status_code == 200
+    breakdown = resp.json()
+    jan = next(b for b in breakdown if b["mes"] == "2026-01")
+    assert jan["saldo"] == 1000.0
+    fev = next(b for b in breakdown if b["mes"] == "2026-02")
+    assert fev["saldo"] == 200.0
+
+
+# --- Caixa Monthly View (positive-only aggregation) ---
+
+def test_caixa_agregacao_mensal_positivos(client):
+    client.post("/api/months/2026/1/caixas", json={
+        "data": 20, "tipo": "CP", "valor": 500.0,
+    })
+    client.post("/api/months/2026/1/caixas", json={
+        "data": 25, "tipo": "CP", "valor": -30.0,
+    })
+
+    resp = client.get("/api/months/2026/1/caixas/agregado")
+    assert resp.status_code == 200
+    agg = resp.json()
+    cp = next(a for a in agg if a["tipo"] == "CP")
+    assert cp["total_positivos"] == 1500.0  # 1000 (fixture) + 500

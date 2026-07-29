@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from monthtrack.models import MonthData, Expense, Category
+from monthtrack.models import MonthData, Expense, Category, CaixaItem, CaixaTipo
 
 
 MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun",
@@ -27,33 +27,57 @@ def write_month(data_dir: str, data: MonthData) -> None:
 
 
 def _format_month(data: MonthData) -> str:
-    lines = [f"Budget: {data.budget}", "",
-             "| Dia | Description | Category | Amount | Rollover |",
-             "|-----|-------------|----------|--------|----------|"]
+    lines = [f"Budget: {data.budget}"]
+    if data.notes:
+        lines.append(f"Notas: {data.notes}")
+    lines.extend(["",
+                  "| Dia | Description | Category | Amount | Rollover |",
+                  "|-----|-------------|----------|--------|----------|"])
     for e in data.expenses:
         roll = f" {e.rollover}" if e.rollover else ""
         lines.append(f"| {e.dia} | {e.description} | {e.category} | {e.amount:.2f} |{roll} |")
+    if data.caixas:
+        lines.extend(["",
+                      "## Caixas",
+                      "| Data | Tipo | Valor |",
+                      "|------|------|-------|"])
+        for c in data.caixas:
+            lines.append(f"| {c.data} | {c.tipo} | {c.valor:.2f} |")
     return "\n".join(lines) + "\n"
 
 
 def _parse_month_text(text: str, year: int, month: int) -> MonthData:
     lines = text.strip().splitlines()
     budget = 0.0
+    notes = ""
     expenses: list[Expense] = []
-    header_found = False
+    caixas: list[CaixaItem] = []
+    section: str | None = None
+    in_caixas = False
 
     for line in lines:
         stripped = line.strip()
+        if not stripped:
+            continue
 
         if stripped.startswith("Budget:"):
             budget = float(stripped.removeprefix("Budget:").strip())
             continue
 
-        if stripped.startswith("|---"):
-            header_found = True
+        if stripped.startswith("Notas:"):
+            notes = stripped.removeprefix("Notas:").strip()
             continue
 
-        if header_found and stripped.startswith("|"):
+        if stripped.startswith("## Caixas"):
+            in_caixas = True
+            section = None
+            continue
+
+        if stripped.startswith("|---"):
+            section = "caixa" if in_caixas else "expense"
+            continue
+
+        if stripped.startswith("|") and section == "expense":
             parts = [p.strip() for p in stripped.strip("|").split("|")]
             if len(parts) >= 4:
                 dia = int(parts[0])
@@ -62,14 +86,23 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
                 amount = float(parts[3])
                 rollover = parts[4].strip() if len(parts) > 4 else ""
                 expenses.append(Expense(
-                    dia=dia,
-                    description=description,
-                    category=category,
-                    amount=amount,
-                    rollover=rollover,
+                    dia=dia, description=description, category=category,
+                    amount=amount, rollover=rollover,
                 ))
 
-    return MonthData(year=year, month=month, budget=budget, expenses=expenses)
+        if stripped.startswith("|") and section == "caixa":
+            parts = [p.strip() for p in stripped.strip("|").split("|")]
+            if len(parts) >= 3:
+                caixas.append(CaixaItem(
+                    data=int(parts[0]),
+                    tipo=parts[1],
+                    valor=float(parts[2]),
+                ))
+
+    return MonthData(
+        year=year, month=month, budget=budget, notes=notes,
+        expenses=expenses, caixas=caixas,
+    )
 
 
 def _find_expense_index(expenses: list[Expense], dia: int) -> int | None:
@@ -118,11 +151,8 @@ def execute_rollover(data_dir: str, year: int, month: int, dia: int) -> list[Exp
         next_data = MonthData(year=next_year, month=next_month, budget=0)
 
     overflow_expense = Expense(
-        dia=0,
-        description=expense.description,
-        category=expense.category,
-        amount=overflow_amount,
-        rollover="x",
+        dia=0, description=expense.description, category=expense.category,
+        amount=overflow_amount, rollover="x",
     )
     next_data.expenses.append(overflow_expense)
     write_month(data_dir, next_data)
@@ -165,6 +195,98 @@ def delete_expense(data_dir: str, year: int, month: int, dia: int) -> bool:
     write_month(data_dir, data)
     return True
 
+
+# --- Caixa Items ---
+
+def add_caixa_item(data_dir: str, year: int, month: int, item: CaixaItem) -> CaixaItem:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        raise FileNotFoundError(f"Month {year}/{month} not found")
+    data.caixas.append(item)
+    write_month(data_dir, data)
+    return item
+
+
+def update_caixa_item(data_dir: str, year: int, month: int, idx: int,
+                      updates: dict) -> CaixaItem | None:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        return None
+    if idx < 0 or idx >= len(data.caixas):
+        return None
+    current = data.caixas[idx]
+    clean = {k: v for k, v in updates.items() if v is not None}
+    updated = current.model_copy(update=clean)
+    data.caixas[idx] = updated
+    write_month(data_dir, data)
+    return updated
+
+
+def delete_caixa_item(data_dir: str, year: int, month: int, idx: int) -> bool:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        return False
+    if idx < 0 or idx >= len(data.caixas):
+        return False
+    data.caixas.pop(idx)
+    write_month(data_dir, data)
+    return True
+
+
+def get_caixa_agregado(data_dir: str, year: int, month: int) -> list[dict]:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        raise FileNotFoundError(f"Month {year}/{month} not found")
+    tipos = set(c.tipo for c in data.caixas)
+    result = []
+    for tipo in sorted(tipos):
+        total_pos = sum(c.valor for c in data.caixas if c.tipo == tipo and c.valor > 0)
+        result.append({"tipo": tipo, "total_positivos": total_pos})
+    return result
+
+
+def get_caixa_saldos(data_dir: str, tipo: str | None = None) -> list[dict]:
+    meses = list_months(data_dir)
+    saldos: dict[str, float] = {}
+    for m in meses:
+        data = parse_month(data_dir, m["year"], m["month"])
+        if data is None:
+            continue
+        for c in data.caixas:
+            if tipo is None or c.tipo == tipo:
+                key = f"{m['year']}-{m['month']:02d}"
+                if key not in saldos:
+                    saldos[key] = 0.0
+                saldos[key] += c.valor
+
+    if tipo:
+        result = [{"mes": k, "saldo": v} for k, v in sorted(saldos.items())]
+    else:
+        totals: dict[str, float] = {}
+        for t in parse_caixas_tipos(data_dir):
+            totals[t.tipo] = 0.0
+        for m in meses:
+            data = parse_month(data_dir, m["year"], m["month"])
+            if data is None:
+                continue
+            for c in data.caixas:
+                totals[c.tipo] = totals.get(c.tipo, 0.0) + c.valor
+        result = [{"tipo": k, "saldo": v} for k, v in sorted(totals.items())]
+    return result
+
+
+# --- Notes ---
+
+def update_notes(data_dir: str, year: int, month: int, notes: str) -> MonthData:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        data = MonthData(year=year, month=month)
+    data.notes = notes
+    write_month(data_dir, data)
+    return data
+
+
+# --- Categories ---
 
 def _cat_path(data_dir: str) -> Path:
     return Path(data_dir) / "cat.md"
@@ -229,6 +351,56 @@ def delete_category(data_dir: str, name: str) -> bool:
     write_categories(data_dir, filtered)
     return True
 
+
+# --- Caixa Tipos ---
+
+def _caixas_tipos_path(data_dir: str) -> Path:
+    return Path(data_dir) / "caixas.md"
+
+
+def parse_caixas_tipos(data_dir: str) -> list[CaixaTipo]:
+    path = _caixas_tipos_path(data_dir)
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    return _parse_caixas_tipos_text(text)
+
+
+def _parse_caixas_tipos_text(text: str) -> list[CaixaTipo]:
+    tipos: list[CaixaTipo] = []
+    for line in text.strip().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            parts = stripped[2:].strip().split(maxsplit=1)
+            tipo = parts[0]
+            emoji = parts[1] if len(parts) > 1 and len(parts[1]) <= 2 else None
+            tipos.append(CaixaTipo(tipo=tipo, nome="", emoji=emoji))
+    return tipos
+
+
+def write_caixas_tipos(data_dir: str, tipos: list[CaixaTipo]) -> None:
+    lines = []
+    for t in tipos:
+        line = f"- {t.tipo}"
+        if t.emoji:
+            line += f" {t.emoji}"
+        lines.append(line)
+    _caixas_tipos_path(data_dir).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def update_caixa_tipo(data_dir: str, tipo: str, updates: dict) -> CaixaTipo | None:
+    tipos = parse_caixas_tipos(data_dir)
+    for t in tipos:
+        if t.tipo == tipo:
+            clean = {k: v for k, v in updates.items() if v is not None}
+            updated = t.model_copy(update=clean)
+            tipos[tipos.index(t)] = updated
+            write_caixas_tipos(data_dir, tipos)
+            return updated
+    return None
+
+
+# --- Month listing ---
 
 def _month_from_name(name: str) -> int | None:
     try:

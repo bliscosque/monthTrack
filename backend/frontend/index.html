@@ -194,6 +194,39 @@ body {
 .add-cat-form { display: flex; gap: 6px; margin-top: 8px; }
 .add-cat-form input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 13px; }
 .add-cat-form button { padding: 8px 12px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: 600; cursor: pointer; }
+
+/* notes */
+.notes-row { margin-top: 8px; font-size: 13px; color: var(--text2); cursor: text; padding: 4px 8px; border-radius: 6px; }
+.notes-row:hover { background: var(--surface2); }
+.notes-input { width: 100%; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface2); color: var(--text); font-size: 13px; }
+
+/* caixas */
+.caixas-card { margin-top: 12px; }
+.caixa-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.caixa-row:last-child { border-bottom: none; }
+.caixa-row:hover { opacity: .8; }
+.caixa-tipo { font-size: 14px; font-weight: 600; min-width: 30px; }
+.caixa-valor { font-size: 14px; margin-left: auto; }
+
+/* caixa modal */
+.caixa-item-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.caixa-item-row:last-child { border-bottom: none; }
+.caixa-item-row .data { color: var(--text2); min-width: 24px; }
+.caixa-item-row .valor { margin-left: auto; font-weight: 600; }
+.caixa-item-row .actions { display: flex; gap: 4px; }
+.caixa-item-row .actions button { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; padding: 2px; }
+
+/* caixas tab */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.caixa-total-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.caixa-total-row:last-child { border-bottom: none; }
+.caixa-total-row:hover { opacity: .8; }
+.caixa-total-row .tipo { font-size: 15px; font-weight: 600; }
+.caixa-total-row .saldo { margin-left: auto; font-size: 15px; }
+.caixa-breakdown-row { display: flex; align-items: center; padding: 6px 0 6px 20px; font-size: 13px; color: var(--text2); }
+.caixa-breakdown-row .mes { min-width: 80px; }
+.caixa-breakdown-row .saldo { margin-left: auto; }
 </style>
 </head>
 <body>
@@ -224,6 +257,7 @@ body {
 
     <div class="tabs">
       <div class="tab active" data-tab="month" onclick="switchTab('month')">Mês</div>
+      <div class="tab" data-tab="caixas" onclick="switchTab('caixas')">Caixas</div>
       <div class="tab" data-tab="history" onclick="switchTab('history')">Histórico</div>
       <div class="tab" data-tab="settings" onclick="switchTab('settings')">Categorias</div>
     </div>
@@ -237,6 +271,7 @@ body {
           <div class="summary-item"><div class="value" id="leftVal">-</div><div class="label">Restante</div></div>
         </div>
         <div class="bar-wrap"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+        <div class="notes-row" id="notesRow" onclick="editNotes()"><span id="notesText"></span></div>
       </div>
 
       <div class="card" id="catBreakdownCard">
@@ -249,6 +284,11 @@ body {
         <div id="expenseList"></div>
         <button class="add-btn" onclick="openExpenseForm()">+ Nova despesa</button>
       </div>
+
+      <div class="card caixas-card" id="caixasCard">
+        <h3>Caixas</h3>
+        <div id="caixasList"></div>
+      </div>
     </div>
 
     <div id="tab-history" style="display:none">
@@ -256,6 +296,13 @@ body {
         <h3>Gastos mensais</h3>
         <div class="chart-filter" id="chartFilter"></div>
         <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+      </div>
+    </div>
+
+    <div id="tab-caixas" style="display:none">
+      <div class="card">
+        <h3>Saldos por caixa</h3>
+        <div id="caixasTotalList"></div>
       </div>
     </div>
 
@@ -304,6 +351,40 @@ body {
     <div class="form-actions">
       <button class="btn-secondary" onclick="closeExpenseForm()">Cancelar</button>
       <button class="btn-primary" id="expenseFormSubmit" onclick="saveExpense()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="caixaModal">
+  <div class="modal">
+    <h2 id="caixaModalTitle">Caixa <span id="caixaModalTipo"></span></h2>
+    <div id="caixaItemsList"></div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="openCaixaForm('add')">+ Adicionar valor</button>
+      <button class="btn-secondary" onclick="openCaixaForm('remove')">- Remover valor</button>
+    </div>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="closeCaixaModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="caixaFormModal">
+  <div class="modal">
+    <h2 id="caixaFormTitle">Adicionar valor</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Dia</label>
+        <input type="number" id="caixaFormDia" min="1" max="31" value="1">
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Valor (R$)</label>
+        <input type="number" step="0.01" id="caixaFormValor" placeholder="0,00">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="closeCaixaForm()">Cancelar</button>
+      <button class="btn-primary" onclick="saveCaixaForm()">Salvar</button>
     </div>
   </div>
 </div>
@@ -388,14 +469,16 @@ async function loadMonth() {
   renderMonth(data);
 }
 
-async function loadDashboard() {
-  const data = await api('GET',`/api/months/${state.year}/${state.month}/dashboard`);
-  if (!data) return;
+function renderDashboard(data) {
+  const total = data.expenses.reduce((s,e) => s + e.amount, 0);
+  const remaining = data.budget - total;
   document.getElementById('budgetVal').textContent = data.budget.toFixed(2);
-  document.getElementById('spentVal').textContent = data.total_spent.toFixed(2);
-  document.getElementById('leftVal').textContent = Math.max(0, data.remaining).toFixed(2);
+  document.getElementById('spentVal').textContent = total.toFixed(2);
+  document.getElementById('leftVal').textContent = Math.max(0, remaining).toFixed(2);
+  document.getElementById('notesText').textContent = data.notes || 'Clique para adicionar notas';
+  document.getElementById('notesRow').style.display = '';
 
-  const pct = data.budget > 0 ? Math.min(100, data.total_spent / data.budget * 100) : 0;
+  const pct = data.budget > 0 ? Math.min(100, total / data.budget * 100) : 0;
   const bar = document.getElementById('barFill');
   bar.style.width = pct + '%';
   bar.className = 'bar-fill' + (pct > 100 ? ' bar-over' : '');
@@ -414,7 +497,7 @@ async function loadDashboard() {
   }
 }
 
-function renderMonth(data) {
+async function renderMonth(data) {
   document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
   document.getElementById('budgetVal').onclick = () => openBudgetForm(data ? data.budget : 0);
   document.getElementById('budgetVal').style.cursor = 'pointer';
@@ -425,6 +508,9 @@ function renderMonth(data) {
     document.getElementById('leftVal').textContent = '0,00';
     document.getElementById('barFill').style.width = '0%';
     document.getElementById('catBreakdown').innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
+    document.getElementById('caixasList').innerHTML = '';
+    document.getElementById('notesText').textContent = '';
+    document.getElementById('notesRow').style.display = 'none';
     return;
   }
   if (data.expenses.length === 0) {
@@ -457,7 +543,8 @@ function renderMonth(data) {
       </div>`;
     }).join('');
   }
-  loadDashboard();
+  renderDashboard(data);
+  await renderCaixas(data);
 }
 
 function esc(s) { return s.replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
@@ -537,12 +624,173 @@ async function deleteExpense(dia) {
   loadMonth();
 }
 
+// --- Notes ---
+
+let editingNotes = false;
+
+function editNotes() {
+  if (editingNotes) return;
+  editingNotes = true;
+  const row = document.getElementById('notesRow');
+  const text = document.getElementById('notesText').textContent;
+  const input = document.createElement('input');
+  input.className = 'notes-input';
+  input.value = text === 'Clique para adicionar notas' ? '' : text;
+  input.autofocus = true;
+  row.innerHTML = '';
+  row.appendChild(input);
+  input.focus();
+  const save = async () => {
+    const val = input.value.trim();
+    await api('PUT', `/api/months/${state.year}/${state.month}/notes`, {notes: val});
+    editingNotes = false;
+    loadMonth();
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { input.blur(); } });
+}
+
+// --- Caixas (monthly view) ---
+
+async function renderCaixas(data) {
+  const el = document.getElementById('caixasList');
+  const tipos = await api('GET', '/api/caixas/tipos') || [];
+  const items = data.caixas || [];
+  el.innerHTML = tipos.map(t => {
+    const totalPos = items.filter(c => c.tipo === t.tipo && c.valor > 0).reduce((s, c) => s + c.valor, 0);
+    return `<div class="caixa-row" onclick="openCaixaModal('${t.tipo}')">
+      <span class="caixa-tipo">${t.emoji || t.tipo}</span>
+      <span style="color:var(--text2);font-size:12px">${t.nome || t.tipo}</span>
+      <span class="caixa-valor">R$${totalPos.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+let caixaModalTipo = null;
+let caixaFormMode = 'add'; // 'add' | 'remove' | 'edit'
+let caixaFormEditIdx = -1;
+
+async function openCaixaModal(tipo) {
+  caixaModalTipo = tipo;
+  document.getElementById('caixaModalTipo').textContent = tipo;
+  await loadCaixaDetail();
+  document.getElementById('caixaModal').classList.add('open');
+}
+
+function closeCaixaModal() {
+  document.getElementById('caixaModal').classList.remove('open');
+  caixaModalTipo = null;
+}
+
+async function loadCaixaDetail() {
+  const data = await api('GET', `/api/months/${state.year}/${state.month}`);
+  if (!data) return;
+  const items = (data.caixas || []).filter(c => c.tipo === caixaModalTipo);
+  const el = document.getElementById('caixaItemsList');
+  if (items.length === 0) {
+    el.innerHTML = '<div class="empty">Nenhum item</div>';
+  } else {
+    el.innerHTML = items.map((c, i) => {
+      const idx = data.caixas.indexOf(c);
+      return `<div class="caixa-item-row">
+        <span class="data">${c.data}</span>
+        <span class="valor" style="color:${c.valor > 0 ? 'var(--green)' : 'var(--red)'}">R$${c.valor.toFixed(2)}</span>
+        <span class="actions">
+          <button onclick="openCaixaForm('edit',${idx})">&#9998;</button>
+          <button onclick="deleteCaixaItem(${idx})">&#10005;</button>
+        </span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function openCaixaForm(mode, idx) {
+  caixaFormMode = mode;
+  caixaFormEditIdx = idx != null ? idx : -1;
+  document.getElementById('caixaFormDia').value = 1;
+  document.getElementById('caixaFormValor').value = '';
+  if (mode === 'add') {
+    document.getElementById('caixaFormTitle').textContent = 'Adicionar valor';
+  } else if (mode === 'remove') {
+    document.getElementById('caixaFormTitle').textContent = 'Remover valor';
+  } else if (mode === 'edit') {
+    document.getElementById('caixaFormTitle').textContent = 'Editar item';
+    api('GET', `/api/months/${state.year}/${state.month}`).then(data => {
+      if (data && data.caixas && data.caixas[idx]) {
+        document.getElementById('caixaFormDia').value = data.caixas[idx].data;
+        document.getElementById('caixaFormValor').value = Math.abs(data.caixas[idx].valor);
+      }
+    });
+  }
+  document.getElementById('caixaFormModal').classList.add('open');
+}
+
+function closeCaixaForm() {
+  document.getElementById('caixaFormModal').classList.remove('open');
+}
+
+async function saveCaixaForm() {
+  const dia = parseInt(document.getElementById('caixaFormDia').value);
+  const val = parseFloat(document.getElementById('caixaFormValor').value);
+  if (isNaN(dia) || dia < 1 || dia > 31) return;
+  if (isNaN(val) || val <= 0) return;
+  if (caixaFormMode === 'edit') {
+    const data = await api('GET', `/api/months/${state.year}/${state.month}`);
+    if (!data || caixaFormEditIdx >= data.caixas.length) return;
+    const item = data.caixas[caixaFormEditIdx];
+    const signedVal = item.valor > 0 ? val : -val;
+    await api('PUT', `/api/months/${state.year}/${state.month}/caixas/${caixaFormEditIdx}`, {
+      data: dia, valor: signedVal,
+    });
+  } else {
+    const signedVal = caixaFormMode === 'remove' ? -val : val;
+    await api('POST', `/api/months/${state.year}/${state.month}/caixas`, {
+      data: dia, tipo: caixaModalTipo, valor: signedVal,
+    });
+  }
+  closeCaixaForm();
+  await loadCaixaDetail();
+  loadMonth();
+}
+
+async function deleteCaixaItem(idx) {
+  if (!confirm('Remover este item?')) return;
+  await api('DELETE', `/api/months/${state.year}/${state.month}/caixas/${idx}`);
+  await loadCaixaDetail();
+  loadMonth();
+}
+
+async function loadCaixasTab() {
+  const saldos = await api('GET', '/api/caixas/saldos') || [];
+  const el = document.getElementById('caixasTotalList');
+  el.innerHTML = saldos.map(s =>
+    `<div class="caixa-total-row" onclick="loadCaixaBreakdown('${s.tipo}')">
+      <span class="tipo">${s.tipo}</span>
+      <span class="saldo" style="color:${s.saldo >= 0 ? 'var(--green)' : 'var(--red)'}">R$${s.saldo.toFixed(2)}</span>
+    </div>`
+  ).join('');
+}
+
+async function loadCaixaBreakdown(tipo) {
+  const data = await api('GET', `/api/caixas/saldos?tipo=${tipo}`) || [];
+  const el = document.getElementById('caixasTotalList');
+  el.innerHTML = `<div class="caixa-total-row" onclick="loadCaixasTab()" style="cursor:pointer;color:var(--accent);font-size:13px">&larr; Voltar</div>`;
+  el.innerHTML += data.map(d =>
+    `<div class="caixa-breakdown-row">
+      <span class="mes">${d.mes}</span>
+      <span class="saldo" style="color:${d.saldo >= 0 ? 'var(--green)' : 'var(--red)'}">R$${d.saldo.toFixed(2)}</span>
+    </div>`
+  ).join('');
+}
+
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  ['month','history','settings'].forEach(t => {
-    document.getElementById('tab-'+t).style.display = t === name ? '' : 'none';
+  ['month','caixas','history','settings'].forEach(t => {
+    const el = document.getElementById('tab-'+t);
+    if (el) el.style.display = t === name ? '' : 'none';
   });
   if (name === 'history') loadHistory();
+  if (name === 'caixas') loadCaixasTab();
   if (name === 'settings') loadSettings();
 }
 

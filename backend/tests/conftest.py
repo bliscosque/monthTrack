@@ -19,12 +19,20 @@ def data_dir(tmp_path: Path) -> Path:
     d.mkdir()
     (d / "2026").mkdir()
     (d / "2026" / "jan.md").write_text(
-        "Budget: 3000\n\n"
+        "Budget: 3000\n"
+        "Notas: Meu mês de janeiro\n\n"
         "| Dia | Description | Category | Amount | Rollover |\n"
         "|-----|-------------|----------|--------|----------|\n"
         "| 5 | Almoço no centro | Restaurante | 35.00 | |\n"
         "| 10 | Inscrição anual | Saúde | 400.00 | x |\n"
+        "\n"
+        "## Caixas\n"
+        "| Data | Tipo | Valor |\n"
+        "|------|------|-------|\n"
+        "| 10 | CP | 1000.00 |\n"
+        "| 15 | CC | -50.00 |\n"
     )
+    (d / "caixas.md").write_text("- CP 🏦\n- CC 💳\n- CB 🎁\n")
     return d
 
 
