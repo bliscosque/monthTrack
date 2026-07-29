@@ -107,6 +107,7 @@ body {
   font-size: 16px; padding: 2px;
 }
 .expense-actions button:active { opacity: .6; }
+.expense-actions .roll-btn { color: var(--orange); font-size: 13px; }
 
 /* add btn */
 .add-btn {
@@ -429,8 +430,16 @@ function renderMonth(data) {
   if (data.expenses.length === 0) {
     document.getElementById('expenseList').innerHTML = '<div class="empty">Nenhuma despesa ainda</div>';
   } else {
-    document.getElementById('expenseList').innerHTML = data.expenses.map(e =>
-      `<div class="expense-item">
+    document.getElementById('expenseList').innerHTML = data.expenses.map(e => {
+      const rollBadge = e.rollover === 'x'
+        ? '<span class="expense-roll">rollover</span>'
+        : e.rollover
+          ? `<span class="expense-roll">orig: R$${parseFloat(e.rollover).toFixed(2)}</span>`
+          : '';
+      const rollBtn = e.rollover === 'x'
+        ? `<button class="roll-btn" onclick="rolloverExpense(${e.dia})">&#10132;</button>`
+        : '';
+      return `<div class="expense-item">
         <span class="expense-dia">${e.dia}</span>
         <div class="expense-info">
           <div class="expense-desc">${esc(e.description)}</div>
@@ -438,14 +447,15 @@ function renderMonth(data) {
         </div>
         <div style="text-align:right">
           <div class="expense-amt">R$${e.amount.toFixed(2)}</div>
-          ${e.rollover ? '<span class="expense-roll">rollover</span>' : ''}
+          ${rollBadge}
         </div>
         <div class="expense-actions">
-          <button onclick="editExpense(${e.dia},'${esc(e.description)}','${esc(e.category)}',${e.amount},${e.rollover})">&#9998;</button>
+          ${rollBtn}
+          <button onclick="editExpense(${e.dia},'${esc(e.description)}','${esc(e.category)}',${e.amount},'${e.rollover}')">&#9998;</button>
           <button onclick="deleteExpense(${e.dia})">&#10005;</button>
         </div>
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
   }
   loadDashboard();
 }
@@ -482,10 +492,15 @@ async function openExpenseForm(dia, desc, cat, amount, rollover) {
   document.getElementById('formDia').value = dia || '';
   document.getElementById('formDesc').value = desc || '';
   document.getElementById('formAmount').value = amount || '';
-  document.getElementById('formRollover').checked = !!rollover;
+  document.getElementById('formRollover').checked = rollover === 'x';
   const sel = document.getElementById('formCategory');
   sel.innerHTML = categories.map(c => `<option value="${c.name}"${cat===c.name?' selected':''}>${c.emoji||''} ${c.name}</option>`).join('');
   document.getElementById('expenseModal').classList.add('open');
+}
+
+async function rolloverExpense(dia) {
+  await api('POST', `/api/months/${state.year}/${state.month}/expenses/${dia}/rollover`);
+  loadMonth();
 }
 
 function closeExpenseForm() {

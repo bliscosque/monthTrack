@@ -1,10 +1,10 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 load_dotenv()
 
@@ -15,15 +15,13 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def get_password_hash(password: str) -> str:
-    return pwd_ctx.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_access_token() -> str:

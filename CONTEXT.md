@@ -21,5 +21,10 @@ A monthly period that holds a budget and a collection of expenses. Has a year an
 _Avoid_: Period, mês fiscal, ciclo
 
 **Rollover Expense (Despesa Especial)**:
-A type of expense that, when it exceeds the remaining budget for the month, is split: the portion within budget stays, and the remainder is automatically carried over as a new rollover expense in the following month (same category, same description). Recurse as needed.
-_Avoid_: Despesa parcelada, conta rotativa
+An expense marked as eligible for manual rollover (field value `"x"`). When the
+user triggers the rollover via the UI, the expense is split: the portion that
+fits within the remaining budget stays, and the excess is carried over as a new
+expense in the following month (same category, same description, `dia=0`).
+After rollover, the field stores the original total amount (e.g. `"200.00"`)
+for historical reference.
+_Avoid_: Despesa parcelada, conta rotativa, auto-rollover

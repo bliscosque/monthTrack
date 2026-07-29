@@ -31,7 +31,7 @@ def _format_month(data: MonthData) -> str:
              "| Dia | Description | Category | Amount | Rollover |",
              "|-----|-------------|----------|--------|----------|"]
     for e in data.expenses:
-        roll = " x" if e.rollover else ""
+        roll = f" {e.rollover}" if e.rollover else ""
         lines.append(f"| {e.dia} | {e.description} | {e.category} | {e.amount:.2f} |{roll} |")
     return "\n".join(lines) + "\n"
 
@@ -60,7 +60,7 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
                 description = parts[1]
                 category = parts[2]
                 amount = float(parts[3])
-                rollover = len(parts) > 4 and parts[4].strip().lower() in ("x", "yes", "true")
+                rollover = parts[4].strip() if len(parts) > 4 else ""
                 expenses.append(Expense(
                     dia=dia,
                     description=description,
@@ -79,37 +79,55 @@ def _find_expense_index(expenses: list[Expense], dia: int) -> int | None:
     return None
 
 
-def add_expense(data_dir: str, year: int, month: int, expense: Expense) -> list[Expense]:
+def add_expense(data_dir: str, year: int, month: int, expense: Expense) -> Expense:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        raise FileNotFoundError(f"Month {year}/{month} not found")
+    data.expenses.append(expense)
+    write_month(data_dir, data)
+    return expense
+
+
+def execute_rollover(data_dir: str, year: int, month: int, dia: int) -> list[Expense]:
     data = parse_month(data_dir, year, month)
     if data is None:
         raise FileNotFoundError(f"Month {year}/{month} not found")
 
-    if expense.rollover and data.remaining < expense.amount:
-        room = max(0, data.remaining)
-        capped_amount = min(expense.amount, room)
-        overflow_amount = expense.amount - capped_amount
+    idx = _find_expense_index(data.expenses, dia)
+    if idx is None:
+        raise FileNotFoundError(f"Expense on day {dia} not found")
 
-        next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    expense = data.expenses[idx]
+    if expense.rollover != "x":
+        raise ValueError(f"Expense on day {dia} is not eligible for rollover")
 
-        results = []
-        if capped_amount > 0:
-            capped = expense.model_copy(update={"amount": capped_amount, "rollover": False})
-            data.expenses.append(capped)
-            write_month(data_dir, data)
-            results.append(capped)
+    original_amount = expense.amount
+    room = max(0, data.remaining + original_amount)
+    capped_amount = min(original_amount, room)
+    overflow_amount = original_amount - capped_amount
 
-        next_data = parse_month(data_dir, next_year, next_month)
-        if next_data is None:
-            next_data = MonthData(year=next_year, month=next_month, budget=0)
-        overflow_expense = expense.model_copy(update={"amount": overflow_amount})
-        next_data.expenses.append(overflow_expense)
-        write_month(data_dir, next_data)
-        results.append(overflow_expense)
-        return results
-    else:
-        data.expenses.append(expense)
-        write_month(data_dir, data)
-        return [expense]
+    data.expenses[idx] = expense.model_copy(update={
+        "amount": capped_amount,
+        "rollover": str(original_amount),
+    })
+    write_month(data_dir, data)
+
+    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    next_data = parse_month(data_dir, next_year, next_month)
+    if next_data is None:
+        next_data = MonthData(year=next_year, month=next_month, budget=0)
+
+    overflow_expense = Expense(
+        dia=0,
+        description=expense.description,
+        category=expense.category,
+        amount=overflow_amount,
+        rollover="x",
+    )
+    next_data.expenses.append(overflow_expense)
+    write_month(data_dir, next_data)
+
+    return [data.expenses[idx], overflow_expense]
 
 
 def update_expense(data_dir: str, year: int, month: int, dia: int,
@@ -122,7 +140,15 @@ def update_expense(data_dir: str, year: int, month: int, dia: int,
         return None
 
     current = data.expenses[idx]
-    updated = current.model_copy(update={k: v for k, v in updates.items() if v is not None})
+    clean = {}
+    for k, v in updates.items():
+        if v is None:
+            continue
+        if k == "rollover" and isinstance(v, bool):
+            clean[k] = "x" if v else ""
+        else:
+            clean[k] = v
+    updated = current.model_copy(update=clean)
     data.expenses[idx] = updated
     write_month(data_dir, data)
     return updated

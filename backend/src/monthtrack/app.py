@@ -17,7 +17,7 @@ from monthtrack.security import create_access_token, get_password_hash, require_
 from monthtrack.storage import (
     parse_month, write_month, add_expense, update_expense, delete_expense,
     parse_categories, add_category, update_category, delete_category,
-    list_months,
+    list_months, execute_rollover,
 )
 
 
@@ -110,11 +110,11 @@ def create_app(data_dir: str = "data") -> FastAPI:
         if data is None:
             raise HTTPException(status_code=404, detail="Month not found")
         try:
-            results = add_expense(app.state.data_dir, year, month,
+            expense = add_expense(app.state.data_dir, year, month,
                                   Expense(**body.model_dump()))
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Month not found")
-        return results[0].model_dump()
+        return expense.model_dump()
 
     @app.put("/api/months/{year}/{month}/expenses/{dia}")
     def edit_expense(year: int, month: int, dia: int, body: ExpenseUpdate, _=Depends(require_auth)):
@@ -128,6 +128,16 @@ def create_app(data_dir: str = "data") -> FastAPI:
         ok = delete_expense(app.state.data_dir, year, month, dia)
         if not ok:
             raise HTTPException(status_code=404, detail="Expense not found")
+
+    @app.post("/api/months/{year}/{month}/expenses/{dia}/rollover")
+    def rollover_expense(year: int, month: int, dia: int, _=Depends(require_auth)):
+        try:
+            results = execute_rollover(app.state.data_dir, year, month, dia)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Expense not found")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Expense not eligible for rollover")
+        return [r.model_dump() for r in results]
 
     @app.get("/api/months/{year}/{month}/dashboard")
     def month_dashboard(year: int, month: int, _=Depends(require_auth)):

@@ -1,12 +1,19 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Expense(BaseModel):
-    dia: int = Field(ge=1, le=31)
+    dia: int = Field(ge=0, le=31)
     description: str
     category: str
-    amount: float = Field(gt=0)
-    rollover: bool = False
+    amount: float = Field(ge=0)
+    rollover: str = ""
+
+    @field_validator("rollover", mode="before")
+    @classmethod
+    def coerce_rollover(cls, v):
+        if isinstance(v, bool):
+            return "x" if v else ""
+        return v
 
 
 class MonthData(BaseModel):
