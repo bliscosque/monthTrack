@@ -465,6 +465,9 @@ async function loadCategories() {
 }
 
 async function loadMonth() {
+  editingNotes = false;
+  const row = document.getElementById('notesRow');
+  row.innerHTML = '<span id="notesText"></span>';
   const data = await api('GET',`/api/months/${state.year}/${state.month}`);
   renderMonth(data);
 }

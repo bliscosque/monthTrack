@@ -73,7 +73,7 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
             section = None
             continue
 
-        if stripped.startswith("|---"):
+        if stripped.replace(" ", "").startswith("|---"):
             section = "caixa" if in_caixas else "expense"
             continue
 
