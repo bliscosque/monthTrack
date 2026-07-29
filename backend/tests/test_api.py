@@ -90,12 +90,12 @@ def test_rollover_manual(client, data_dir):
 
     original, overflow = results
     assert original["dia"] == 20
-    assert original["amount"] == 50.0
+    assert original["amount"] == 0.0
     assert original["rollover"] == "200.0"
     assert original["description"] == "Compra grande"
 
     assert overflow["dia"] == 0
-    assert overflow["amount"] == 150.0
+    assert overflow["amount"] == 200.0
     assert overflow["rollover"] == "x"
     assert overflow["description"] == "Compra grande"
 
@@ -242,8 +242,8 @@ def test_dashboard_month(client):
     assert resp.status_code == 200
     d = resp.json()
     assert d["budget"] == 3000.0
-    assert d["total_spent"] == 435.0
-    assert d["remaining"] == 2565.0
+    assert d["total_spent"] == 1435.0
+    assert d["remaining"] == 1565.0
 
 
 def test_history(client):

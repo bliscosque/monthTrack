@@ -38,7 +38,9 @@ class MonthData(BaseModel):
 
     @property
     def total_spent(self) -> float:
-        return sum(e.amount for e in self.expenses)
+        expenses_sum = sum(e.amount for e in self.expenses)
+        caixas_pos = sum(c.valor for c in self.caixas if c.valor > 0)
+        return expenses_sum + caixas_pos
 
     @property
     def remaining(self) -> float:
