@@ -1,23 +1,23 @@
 # Deploy
 
-App single-user (senha + JWT), dados em arquivos `.md`.
+Single-user app (password + JWT), data stored as `.md` files.
 
 ---
 
-## Opção 1 — Servidor direto (mais simples)
+## Option 1 — Direct server (simplest)
 
 ```bash
-# na raiz do projeto
+# in the project root
 ./run.sh
 ```
 
-O servidor sobe em `http://0.0.0.0:8000`. **Sem HTTPS** — use apenas em rede local ou atrás de um proxy.
+The server starts at `http://0.0.0.0:8000`. **No HTTPS** — use on a local network only, or behind a proxy.
 
 ---
 
-## Opção 2 — Systemd + reverse proxy (recomendado)
+## Option 2 — Systemd + reverse proxy (recommended)
 
-### 2.1 Service systemd
+### 2.1 Systemd service
 
 `/etc/systemd/system/monthtrack.service`:
 
@@ -44,7 +44,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now monthtrack
 ```
 
-### 2.2 Nginx (HTTPS com Let's Encrypt)
+### 2.2 Nginx (HTTPS with Let's Encrypt)
 
 ```nginx
 server {
@@ -70,7 +70,7 @@ server {
 }
 ```
 
-### 2.3 Caddy (alternativa, HTTPS automático)
+### 2.3 Caddy (alternative, automatic HTTPS)
 
 ```caddy
 monthtrack.exemplo.com {
@@ -80,7 +80,7 @@ monthtrack.exemplo.com {
 
 ---
 
-## Opção 3 — Docker (opcional)
+## Option 3 — Docker (optional)
 
 ```dockerfile
 FROM python:3.12-slim
@@ -90,33 +90,33 @@ RUN pip install .
 CMD ["uvicorn", "monthtrack.app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-Monte o diretório de dados como volume:
+Mount the data directory as a volume:
 
 ```bash
 docker build -t monthtrack .
 docker run -d -p 8000:8000 \
-  -e APP_PASSWORD=minha_senha \
+  -e APP_PASSWORD=my_password \
   -e DATA_DIR=/data \
-  -v /caminho/local/data:/data \
+  -v /local/path/data:/data \
   monthtrack
 ```
 
 ---
 
-## Variáveis de ambiente
+## Environment variables
 
-| Variável | Obrigatório | Padrão | Descrição |
-|----------|-------------|--------|-----------|
-| `APP_PASSWORD` | não* | gerada aleatória | Senha de acesso |
-| `DATA_DIR` | não | `data` | Diretório dos arquivos `.md` |
-| `APP_SECRET` | não | aleatório | Chave para assinar JWT |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_PASSWORD` | no* | random | Access password |
+| `DATA_DIR` | no | `data` | Directory for `.md` files |
+| `APP_SECRET` | no | random | Key for signing JWT |
 
-\* Se não definida, uma senha aleatória é exibida no console na inicialização.
+\* If not set, a random password is printed to the console on startup.
 
 ---
 
-## Manutenção
+## Maintenance
 
-- **Backup**: copie o diretório `DATA_DIR` inteiro (são arquivos `.md` de texto)
-- **Atualizar**: `git pull` e reiniciar o service
+- **Backup**: copy the entire `DATA_DIR` directory (plain `.md` text files)
+- **Update**: `git pull` and restart the service
 - **Logs**: `journalctl -u monthtrack -f`

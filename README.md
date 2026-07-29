@@ -36,12 +36,12 @@ data/
 
 ```markdown
 Budget: 3000
-Notas: Minhas observações do mês
+Notas: My notes for the month
 
 | Dia | Description | Category | Amount | Rollover |
 |-----|-------------|----------|--------|----------|
-| 5   | Almoço      | Comida   | 35.00  |          |
-| 10  | Plano       | Saúde    | 150.00 | x        |
+| 5   | Lunch       | Food     | 35.00  |          |
+| 10  | Insurance   | Health   | 150.00 | x        |
 
 ## Caixas
 | Data | Tipo | Valor |
