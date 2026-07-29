@@ -80,6 +80,7 @@ body {
 .bar-wrap { margin-top: 10px; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width .3s; }
 .bar-over { background: var(--red); }
+.bar-warn { background: var(--orange); }
 
 /* categories */
 .cat-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -173,6 +174,16 @@ body {
 
 /* chart */
 .chart-wrap { position: relative; height: 200px; }
+.chart-wrap-sm { position: relative; height: 120px; }
+.chart-wrap-md { position: relative; height: 160px; margin-top: 8px; }
+.history-range { margin-bottom: 10px; }
+.history-range .form-row { display: flex; gap: 8px; }
+.history-range .form-group { flex: 1; }
+.history-range label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.history-range select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 13px; }
+.history-quick-btns { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.history-quick-btns button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); color: var(--text); font-size: 12px; cursor: pointer; }
+.history-quick-btns button:active { opacity: .7; }
 .chart-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .chart-filter label { font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .chart-filter input { accent-color: var(--accent); }
@@ -271,12 +282,14 @@ body {
           <div class="summary-item"><div class="value" id="leftVal">-</div><div class="label">Restante</div></div>
         </div>
         <div class="bar-wrap"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+        <div class="chart-wrap-sm"><canvas id="summaryPieChart"></canvas></div>
         <div class="notes-row" id="notesRow" onclick="editNotes()"><span id="notesText"></span></div>
       </div>
 
       <div class="card" id="catBreakdownCard">
         <h3>Por categoria</h3>
         <div class="cat-list" id="catBreakdown"></div>
+        <div class="chart-wrap-md"><canvas id="catPieChart"></canvas></div>
       </div>
 
       <div class="card">
@@ -294,8 +307,29 @@ body {
     <div id="tab-history" style="display:none">
       <div class="card">
         <h3>Gastos mensais</h3>
+        <div class="history-range" id="historyRange">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Mês inicial</label>
+              <select id="histStartMonth" onchange="loadHistory()"></select>
+              <select id="histStartYear" onchange="loadHistory()"></select>
+            </div>
+            <div class="form-group">
+              <label>Mês final</label>
+              <select id="histEndMonth" onchange="loadHistory()"></select>
+              <select id="histEndYear" onchange="loadHistory()"></select>
+            </div>
+          </div>
+          <div class="history-quick-btns">
+            <button onclick="setHistoryRange('currentYear')">Ano atual</button>
+            <button onclick="setHistoryRange('prevYear')">Ano anterior</button>
+            <button onclick="setHistoryRange('last12')">Últimos 12 meses</button>
+            <button onclick="setHistoryRange('last6')">Últimos 6 meses</button>
+          </div>
+        </div>
         <div class="chart-filter" id="chartFilter"></div>
         <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+        <div id="historyAvg" style="margin-top:8px;font-size:13px;color:var(--text2)"></div>
       </div>
     </div>
 
@@ -405,7 +439,7 @@ body {
 
 <script>
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let state = { year: 2026, month: 1, editingIdx: null, chart: null };
+let state = { year: 2026, month: 1, editingIdx: null, chart: null, summaryPieChart: null, catPieChart: null };
 let categories = [];
 
 function getToken() { return sessionStorage.getItem('token'); }
@@ -486,7 +520,9 @@ function renderDashboard(data) {
   const pct = data.budget > 0 ? Math.min(100, total / data.budget * 100) : 0;
   const bar = document.getElementById('barFill');
   bar.style.width = pct + '%';
-  bar.className = 'bar-fill' + (pct > 100 ? ' bar-over' : '');
+  bar.className = 'bar-fill';
+  if (pct >= 100) bar.className += ' bar-over';
+  else if (pct > 85) bar.className += ' bar-warn';
 
   const cats = {};
   for (const e of data.expenses) {
@@ -499,6 +535,75 @@ function renderDashboard(data) {
     breakEl.innerHTML = Object.entries(cats).map(([c,a]) =>
       `<span class="cat-badge">${c} <span class="amt">R$${a.toFixed(2)}</span></span>`
     ).join('');
+  }
+
+  // Summary doughnut chart
+  if (state.summaryPieChart) { state.summaryPieChart.destroy(); state.summaryPieChart = null; }
+  if (data.budget > 0) {
+    const ctx = document.getElementById('summaryPieChart').getContext('2d');
+    const pieRemaining = Math.max(0, remaining);
+    const pieColor = pct >= 100 ? '#ef5350' : pct > 85 ? '#ffa726' : '#4fc3f7';
+    state.summaryPieChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Gasto', 'Restante'],
+        datasets: [{
+          data: [total - Math.max(0, -remaining), pieRemaining],
+          backgroundColor: [pieColor, '#66bb6a'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `R$${parseFloat(ctx.raw).toFixed(2)}`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Category pie chart
+  if (state.catPieChart) { state.catPieChart.destroy(); state.catPieChart = null; }
+  const catData = Object.entries(cats);
+  if (catData.length > 0) {
+    const ctx = document.getElementById('catPieChart').getContext('2d');
+    const colors = ['#4fc3f7','#66bb6a','#ffa726','#ef5350','#ab47bc','#26c6da','#ff7043','#9ccc65','#f06292','#7e57c2','#26a69a','#ffca28'];
+    state.catPieChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: catData.map(([c]) => c),
+        datasets: [{
+          data: catData.map(([,a]) => a),
+          backgroundColor: catData.map((_, i) => colors[i % colors.length]),
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '50%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#a0a0a0', font: { size: 11 }, boxWidth: 12, padding: 8 }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const tot = ctx.dataset.data.reduce((a,b) => a + b, 0);
+                const p = ((ctx.raw / tot) * 100).toFixed(1);
+                return `${ctx.label}: R$${parseFloat(ctx.raw).toFixed(2)} (${p}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
   }
 }
 
@@ -516,6 +621,8 @@ async function renderMonth(data) {
     document.getElementById('caixasList').innerHTML = '';
     document.getElementById('notesText').textContent = '';
     document.getElementById('notesRow').style.display = 'none';
+    if (state.summaryPieChart) { state.summaryPieChart.destroy(); state.summaryPieChart = null; }
+    if (state.catPieChart) { state.catPieChart.destroy(); state.catPieChart = null; }
     return;
   }
   if (data.expenses.length === 0) {
@@ -801,8 +908,24 @@ function switchTab(name) {
 
 async function loadHistory() {
   const selected = [...document.querySelectorAll('#chartFilter input:checked')].map(i => i.value);
-  const params = selected.length > 0 ? '?categories=' + selected.join(',') : '';
-  const data = await api('GET', '/api/history' + params) || [];
+  const params = new URLSearchParams();
+  if (selected.length > 0) params.set('categories', selected.join(','));
+
+  const startMonth = parseInt(document.getElementById('histStartMonth').value);
+  const startYear = parseInt(document.getElementById('histStartYear').value);
+  const endMonth = parseInt(document.getElementById('histEndMonth').value);
+  const endYear = parseInt(document.getElementById('histEndYear').value);
+  if (!isNaN(startMonth) && !isNaN(startYear)) {
+    params.set('start_month', startMonth);
+    params.set('start_year', startYear);
+  }
+  if (!isNaN(endMonth) && !isNaN(endYear)) {
+    params.set('end_month', endMonth);
+    params.set('end_year', endYear);
+  }
+
+  const qs = params.toString();
+  const data = await api('GET', '/api/history' + (qs ? '?' + qs : '')) || [];
   const cats = await api('GET', '/api/categories') || [];
 
   const filterEl = document.getElementById('chartFilter');
@@ -834,6 +957,75 @@ async function loadHistory() {
       }
     }
   });
+
+  // Average
+  const avgEl = document.getElementById('historyAvg');
+  if (data.length > 0) {
+    const totalSpent = spent.reduce((a,b) => a + b, 0);
+    const avg = totalSpent / data.length;
+    const label = selected.length === 1 ? `Média "${selected[0]}": R$${avg.toFixed(2)}` : `Média mensal: R$${avg.toFixed(2)}`;
+    avgEl.textContent = `${label} (${data.length} ${data.length === 1 ? 'mês' : 'meses'})`;
+  } else {
+    avgEl.textContent = '';
+  }
+}
+
+function initHistoryRange() {
+  const now = new Date();
+  const curYear = now.getFullYear();
+
+  ['histStartMonth', 'histEndMonth'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = MONTHS.map((m, i) => `<option value="${i+1}">${m}</option>`).join('');
+  });
+
+  ['histStartYear', 'histEndYear'].forEach(id => {
+    const sel = document.getElementById(id);
+    let opts = '';
+    for (let y = curYear - 5; y <= curYear + 1; y++) {
+      opts += `<option value="${y}">${y}</option>`;
+    }
+    sel.innerHTML = opts;
+  });
+
+  document.getElementById('histStartMonth').value = 1;
+  document.getElementById('histStartYear').value = curYear;
+  document.getElementById('histEndMonth').value = 12;
+  document.getElementById('histEndYear').value = curYear;
+}
+
+function setHistoryRange(range) {
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+
+  let startY, startM, endY, endM;
+
+  switch (range) {
+    case 'currentYear':
+      startY = curYear; startM = 1; endY = curYear; endM = 12;
+      break;
+    case 'prevYear':
+      startY = curYear - 1; startM = 1; endY = curYear - 1; endM = 12;
+      break;
+    case 'last12':
+      startM = curMonth + 1; startY = curYear - 1;
+      if (startM > 12) { startM = 1; startY++; }
+      endY = curYear; endM = curMonth;
+      break;
+    case 'last6':
+      startM = curMonth - 5; startY = curYear;
+      if (startM < 1) { startM += 12; startY--; }
+      endY = curYear; endM = curMonth;
+      break;
+  }
+
+  document.getElementById('histStartMonth').value = startM;
+  document.getElementById('histStartYear').value = startY;
+  document.getElementById('histEndMonth').value = endM;
+  document.getElementById('histEndYear').value = endY;
+
+  loadHistory();
 }
 
 async function loadSettings() {
@@ -870,6 +1062,7 @@ async function initApp() {
   state.year = now.getFullYear();
   state.month = now.getMonth() + 1;
   await loadCategories();
+  initHistoryRange();
   await loadMonth();
 }
 

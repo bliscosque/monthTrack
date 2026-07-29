@@ -213,8 +213,23 @@ def create_app(data_dir: str = "data") -> FastAPI:
         ).model_dump()
 
     @app.get("/api/history")
-    def history(categories: str | None = None, _=Depends(require_auth)):
+    def history(
+        categories: str | None = None,
+        start_year: int | None = None,
+        start_month: int | None = None,
+        end_year: int | None = None,
+        end_month: int | None = None,
+        _=Depends(require_auth),
+    ):
         all_months = list_months(app.state.data_dir)
+
+        if start_year is not None and start_month is not None:
+            start_val = start_year * 12 + start_month
+            all_months = [m for m in all_months if m["year"] * 12 + m["month"] >= start_val]
+        if end_year is not None and end_month is not None:
+            end_val = end_year * 12 + end_month
+            all_months = [m for m in all_months if m["year"] * 12 + m["month"] <= end_val]
+
         points = []
         for m in all_months:
             data = parse_month(app.state.data_dir, m["year"], m["month"])

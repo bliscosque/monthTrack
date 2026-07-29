@@ -408,12 +408,10 @@ def list_months(data_dir: str) -> list[dict]:
         if not year_dir.is_dir() or not year_dir.name.isdigit():
             continue
         year = int(year_dir.name)
-        for f in sorted(year_dir.glob("*.md")):
-            stem = f.stem
-            month = _month_from_name(stem)
-            if month is None:
-                continue
-            data = parse_month(data_dir, year, month)
-            if data:
-                months.append({"year": year, "month": month})
+        for month in range(1, 13):
+            path = _month_path(data_dir, year, month)
+            if path.exists():
+                data = parse_month(data_dir, year, month)
+                if data:
+                    months.append({"year": year, "month": month})
     return months
