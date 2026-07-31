@@ -5,35 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>monthTrack</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #121212;
-  --surface: #1e1e1e;
-  --surface2: #2a2a2a;
-  --text: #e0e0e0;
-  --text2: #a0a0a0;
-  --accent: #4fc3f7;
-  --green: #66bb6a;
-  --red: #ef5350;
-  --orange: #ffa726;
-  --border: #333;
+  /* ledger palette: warm ink, paper text, gold accent, muted status tones */
+  --bg: #14181a;
+  --surface: #1c2422;
+  --surface2: #232c29;
+  --text: #ece7da;
+  --text2: #8a9690;
+  --accent: #c9974c;
+  --green: #6fae7f;
+  --red: #c0604a;
+  --orange: #d4914c;
+  --border: #2d3634;
   --radius: 10px;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg); color: var(--text);
   line-height: 1.5; padding: 0; min-height: 100dvh;
   display: flex; align-items: center; justify-content: center;
 }
 .app { max-width: 480px; margin: 0 auto; padding: 12px; width: 100%; }
 
+/* ledger figures: every money/day number reads as one consistent column */
+.summary-item .value, .cat-badge .amt, .expense-dia, .expense-amt,
+.caixa-valor, .caixa-item-row .valor, .caixa-total-row .saldo, .caixa-breakdown-row .saldo,
+input[type="number"] {
+  font-family: var(--font-mono);
+}
+
 /* login */
 .login-screen {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 80dvh; text-align: center; padding: 20px;
 }
-.login-screen h1 { font-size: 28px; color: var(--accent); margin-bottom: 8px; }
+.login-screen h1 { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: 32px; color: var(--accent); margin-bottom: 8px; }
 .login-screen p { color: var(--text2); font-size: 14px; margin-bottom: 24px; }
 .login-screen form { width: 100%; max-width: 300px; }
 .login-screen input {
@@ -49,7 +63,7 @@ body {
 
 /* header */
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.header h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
+.header h1 { font-family: var(--font-display); font-style: italic; font-weight: 600; font-size: 22px; color: var(--accent); }
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .logout-btn {
   background: none; border: 1px solid var(--border); color: var(--text2); font-size: 12px;
@@ -86,9 +100,11 @@ body {
 .cat-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .cat-badge {
   background: var(--surface2); padding: 4px 10px; border-radius: 14px;
-  font-size: 12px; display: flex; align-items: center; gap: 4px;
+  font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;
 }
 .cat-badge .amt { color: var(--text2); margin-left: auto; }
+.cat-badge.active { background: var(--accent); color: #000; }
+.cat-badge.active .amt { color: #000; opacity: .7; }
 
 /* expenses */
 .expense-item {
@@ -110,10 +126,21 @@ body {
 .expense-actions button:active { opacity: .6; }
 .expense-actions .roll-btn { color: var(--orange); font-size: 13px; }
 
+/* expense header (sort) */
+.expense-header { display: flex; align-items: center; gap: 8px; padding: 0 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.eh-col { font-size: 11px; color: var(--text2); cursor: pointer; user-select: none; white-space: nowrap; }
+.eh-col.active { color: var(--accent); font-weight: 600; }
+.eh-col[data-col="dia"] { min-width: 24px; }
+.eh-col[data-col="amount"] { margin-left: auto; }
+
+/* expense filter */
+.expense-filter { font-size: 12px; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.filter-clear { cursor: pointer; color: var(--text2); }
+
 /* add btn */
 .add-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; padding: 10px; margin-top: 8px;
+  width: 100%; padding: 10px; margin-bottom: 10px;
   background: var(--accent); color: #000; border: none; border-radius: var(--radius);
   font-size: 14px; font-weight: 600; cursor: pointer;
 }
@@ -175,6 +202,15 @@ body {
 /* chart */
 .chart-wrap { position: relative; height: 200px; }
 .chart-wrap-sm { position: relative; height: 120px; }
+.gauge-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.gauge-pct {
+  font-family: var(--font-display); font-style: italic; font-weight: 600;
+  font-size: 26px; line-height: 1; color: var(--text);
+}
+.gauge-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; margin-top: 3px; }
 .chart-wrap-md { position: relative; height: 160px; margin-top: 8px; }
 .history-range { margin-bottom: 10px; }
 .history-range .form-row { display: flex; gap: 8px; }
@@ -212,7 +248,6 @@ body {
 .notes-input { width: 100%; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface2); color: var(--text); font-size: 13px; }
 
 /* caixas */
-.caixas-card { margin-top: 12px; }
 .caixa-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .caixa-row:last-child { border-bottom: none; }
 .caixa-row:hover { opacity: .8; }
@@ -282,7 +317,13 @@ body {
           <div class="summary-item"><div class="value" id="leftVal">-</div><div class="label">Restante</div></div>
         </div>
         <div class="bar-wrap"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
-        <div class="chart-wrap-sm"><canvas id="summaryPieChart"></canvas></div>
+        <div class="chart-wrap-sm">
+          <canvas id="summaryPieChart"></canvas>
+          <div class="gauge-center">
+            <span class="gauge-pct" id="gaugePct"></span>
+            <span class="gauge-label">do orçamento</span>
+          </div>
+        </div>
         <div class="notes-row" id="notesRow" onclick="editNotes()"><span id="notesText"></span></div>
       </div>
 
@@ -292,15 +333,22 @@ body {
         <div class="chart-wrap-md"><canvas id="catPieChart"></canvas></div>
       </div>
 
-      <div class="card">
-        <h3>Despesas</h3>
-        <div id="expenseList"></div>
-        <button class="add-btn" onclick="openExpenseForm()">+ Nova despesa</button>
-      </div>
-
       <div class="card caixas-card" id="caixasCard">
         <h3>Caixas</h3>
         <div id="caixasList"></div>
+      </div>
+
+      <div class="card">
+        <h3>Despesas</h3>
+        <button class="add-btn" onclick="openExpenseForm()">+ Nova despesa</button>
+        <div class="expense-filter" id="expenseFilterBar" style="display:none"></div>
+        <div class="expense-header" id="expenseHeader">
+          <span class="eh-col" data-col="dia" onclick="setSort('dia')">Dia</span>
+          <span class="eh-col" data-col="description" onclick="setSort('description')">Descrição</span>
+          <span class="eh-col" data-col="category" onclick="setSort('category')">Categoria</span>
+          <span class="eh-col" data-col="amount" onclick="setSort('amount')">Valor</span>
+        </div>
+        <div id="expenseList"></div>
       </div>
     </div>
 
@@ -439,7 +487,16 @@ body {
 
 <script>
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let state = { year: 2026, month: 1, editingIdx: null, chart: null, summaryPieChart: null, catPieChart: null };
+let state = {
+  year: 2026, month: 1, editingIdx: null, chart: null, summaryPieChart: null, catPieChart: null,
+  sortColumn: 'dia', sortDir: 'asc', categoryFilter: null, monthData: null,
+};
+const SORT_COMPARATORS = {
+  dia: (a, b) => a.dia - b.dia,
+  description: (a, b) => a.description.localeCompare(b.description),
+  category: (a, b) => a.category.localeCompare(b.category),
+  amount: (a, b) => a.amount - b.amount,
+};
 let categories = [];
 
 function getToken() { return localStorage.getItem('token'); }
@@ -502,8 +559,27 @@ async function loadMonth() {
   editingNotes = false;
   const row = document.getElementById('notesRow');
   row.innerHTML = '<span id="notesText"></span>';
+  state.sortColumn = 'dia';
+  state.sortDir = 'asc';
+  state.categoryFilter = null;
   const data = await api('GET',`/api/months/${state.year}/${state.month}`);
   renderMonth(data);
+}
+
+function renderCategoryBadges(data) {
+  const cats = {};
+  for (const e of data.expenses) {
+    if (!e.rollover) { cats[e.category] = (cats[e.category]||0) + e.amount; }
+  }
+  const breakEl = document.getElementById('catBreakdown');
+  if (Object.keys(cats).length === 0) {
+    breakEl.innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
+  } else {
+    breakEl.innerHTML = Object.entries(cats).map(([c,a]) =>
+      `<span class="cat-badge${c === state.categoryFilter ? ' active' : ''}" onclick="filterByCategory('${esc(c)}')">${esc(c)} <span class="amt">R$${a.toFixed(2)}</span></span>`
+    ).join('');
+  }
+  return cats;
 }
 
 function renderDashboard(data) {
@@ -518,38 +594,32 @@ function renderDashboard(data) {
   document.getElementById('notesRow').style.display = '';
 
   const pct = data.budget > 0 ? Math.min(100, total / data.budget * 100) : 0;
+  const pctReal = data.budget > 0 ? (total / data.budget * 100) : 0;
   const bar = document.getElementById('barFill');
   bar.style.width = pct + '%';
   bar.className = 'bar-fill';
   if (pct >= 100) bar.className += ' bar-over';
   else if (pct > 85) bar.className += ' bar-warn';
 
-  const cats = {};
-  for (const e of data.expenses) {
-    if (!e.rollover) { cats[e.category] = (cats[e.category]||0) + e.amount; }
-  }
-  const breakEl = document.getElementById('catBreakdown');
-  if (Object.keys(cats).length === 0) {
-    breakEl.innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
-  } else {
-    breakEl.innerHTML = Object.entries(cats).map(([c,a]) =>
-      `<span class="cat-badge">${c} <span class="amt">R$${a.toFixed(2)}</span></span>`
-    ).join('');
-  }
+  const gaugePctEl = document.getElementById('gaugePct');
+  gaugePctEl.textContent = data.budget > 0 ? `${Math.round(pctReal)}%` : '';
+  gaugePctEl.style.color = pct >= 100 ? 'var(--red)' : pct > 85 ? 'var(--orange)' : 'var(--text)';
+
+  const cats = renderCategoryBadges(data);
 
   // Summary doughnut chart
   if (state.summaryPieChart) { state.summaryPieChart.destroy(); state.summaryPieChart = null; }
   if (data.budget > 0) {
     const ctx = document.getElementById('summaryPieChart').getContext('2d');
     const pieRemaining = Math.max(0, remaining);
-    const pieColor = pct >= 100 ? '#ef5350' : pct > 85 ? '#ffa726' : '#4fc3f7';
+    const pieColor = pct >= 100 ? '#c0604a' : pct > 85 ? '#d4914c' : '#c9974c';
     state.summaryPieChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
         labels: ['Gasto', 'Restante'],
         datasets: [{
           data: [total - Math.max(0, -remaining), pieRemaining],
-          backgroundColor: [pieColor, '#66bb6a'],
+          backgroundColor: [pieColor, '#6fae7f'],
           borderWidth: 0,
         }]
       },
@@ -573,7 +643,7 @@ function renderDashboard(data) {
   const catData = Object.entries(cats);
   if (catData.length > 0) {
     const ctx = document.getElementById('catPieChart').getContext('2d');
-    const colors = ['#4fc3f7','#66bb6a','#ffa726','#ef5350','#ab47bc','#26c6da','#ff7043','#9ccc65','#f06292','#7e57c2','#26a69a','#ffca28'];
+    const colors = ['#c9974c','#6fae7f','#c0604a','#8a9690','#a67c52','#5b8a72','#b5763f','#7c9a8e','#9c6b4f','#4f7a68','#c48a5a','#6b7a6f'];
     state.catPieChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
@@ -590,7 +660,7 @@ function renderDashboard(data) {
         plugins: {
           legend: {
             position: 'bottom',
-            labels: { color: '#a0a0a0', font: { size: 11 }, boxWidth: 12, padding: 8 }
+            labels: { color: '#8a9690', font: { size: 11 }, boxWidth: 12, padding: 8 }
           },
           tooltip: {
             callbacks: {
@@ -611,12 +681,16 @@ async function renderMonth(data) {
   document.getElementById('monthLabel').textContent = `${MONTHS[state.month-1]} ${state.year}`;
   document.getElementById('budgetVal').onclick = () => openBudgetForm(data ? data.budget : 0);
   document.getElementById('budgetVal').style.cursor = 'pointer';
+  state.monthData = data;
   if (!data) {
     document.getElementById('expenseList').innerHTML = '<div class="empty">Clique no valor do budget acima para definir o orçamento do mês</div>';
+    document.getElementById('expenseHeader').style.display = 'none';
+    document.getElementById('expenseFilterBar').style.display = 'none';
     document.getElementById('budgetVal').textContent = '0,00';
     document.getElementById('spentVal').textContent = '0,00';
     document.getElementById('leftVal').textContent = '0,00';
     document.getElementById('barFill').style.width = '0%';
+    document.getElementById('gaugePct').textContent = '';
     document.getElementById('catBreakdown').innerHTML = '<div class="empty">Nenhuma despesa neste mês</div>';
     document.getElementById('caixasList').innerHTML = '';
     document.getElementById('notesText').textContent = '';
@@ -625,38 +699,97 @@ async function renderMonth(data) {
     if (state.catPieChart) { state.catPieChart.destroy(); state.catPieChart = null; }
     return;
   }
-  if (data.expenses.length === 0) {
-    document.getElementById('expenseList').innerHTML = '<div class="empty">Nenhuma despesa ainda</div>';
-  } else {
-    document.getElementById('expenseList').innerHTML = data.expenses.map((e, idx) => {
-      const rollBadge = e.rollover === 'x'
-        ? '<span class="expense-roll">rollover</span>'
-        : e.rollover
-          ? `<span class="expense-roll">orig: R$${parseFloat(e.rollover).toFixed(2)}</span>`
-          : '';
-      const rollBtn = e.rollover === 'x'
-        ? `<button class="roll-btn" onclick="rolloverExpense(${idx})">&#10132;</button>`
-        : '';
-      return `<div class="expense-item">
-        <span class="expense-dia">${e.dia}</span>
-        <div class="expense-info">
-          <div class="expense-desc">${esc(e.description)}</div>
-          <div class="expense-cat">${esc(e.category)}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="expense-amt">R$${e.amount.toFixed(2)}</div>
-          ${rollBadge}
-        </div>
-        <div class="expense-actions">
-          ${rollBtn}
-          <button onclick="editExpense(${idx},'${esc(e.description)}','${esc(e.category)}',${e.amount},'${e.rollover}',${e.dia})">&#9998;</button>
-          <button onclick="deleteExpense(${idx})">&#10005;</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
+  document.getElementById('expenseHeader').style.display = '';
+  renderExpenseList();
   renderDashboard(data);
   await renderCaixas(data);
+}
+
+function renderExpenseList() {
+  const data = state.monthData;
+  if (!data) return;
+
+  const filterBar = document.getElementById('expenseFilterBar');
+  if (state.categoryFilter) {
+    filterBar.style.display = '';
+    filterBar.innerHTML = `Filtrando: ${esc(state.categoryFilter)} <span class="filter-clear" onclick="clearCategoryFilter()">&#10005;</span>`;
+  } else {
+    filterBar.style.display = 'none';
+    filterBar.innerHTML = '';
+  }
+
+  const colLabels = { dia: 'Dia', description: 'Descrição', category: 'Categoria', amount: 'Valor' };
+  document.querySelectorAll('#expenseHeader .eh-col').forEach(el => {
+    const col = el.dataset.col;
+    const active = col === state.sortColumn;
+    el.classList.toggle('active', active);
+    el.textContent = active ? `${colLabels[col]} ${state.sortDir === 'asc' ? '▲' : '▼'}` : colLabels[col];
+  });
+
+  let list = data.expenses.map((e, idx) => ({ ...e, _idx: idx }));
+  if (state.categoryFilter) list = list.filter(e => e.category === state.categoryFilter);
+
+  const cmp = SORT_COMPARATORS[state.sortColumn];
+  list.sort((a, b) => {
+    const r = cmp(a, b);
+    return state.sortDir === 'asc' ? r : -r;
+  });
+
+  if (list.length === 0) {
+    document.getElementById('expenseList').innerHTML =
+      `<div class="empty">Nenhuma despesa ${state.categoryFilter ? 'nesta categoria' : 'ainda'}</div>`;
+    return;
+  }
+
+  document.getElementById('expenseList').innerHTML = list.map(e => {
+    const idx = e._idx;
+    const rollBadge = e.rollover === 'x'
+      ? '<span class="expense-roll">rollover</span>'
+      : e.rollover
+        ? `<span class="expense-roll">orig: R$${parseFloat(e.rollover).toFixed(2)}</span>`
+        : '';
+    const rollBtn = e.rollover === 'x'
+      ? `<button class="roll-btn" onclick="rolloverExpense(${idx})">&#10132;</button>`
+      : '';
+    return `<div class="expense-item">
+      <span class="expense-dia">${e.dia}</span>
+      <div class="expense-info">
+        <div class="expense-desc">${esc(e.description)}</div>
+        <div class="expense-cat">${esc(e.category)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="expense-amt">R$${e.amount.toFixed(2)}</div>
+        ${rollBadge}
+      </div>
+      <div class="expense-actions">
+        ${rollBtn}
+        <button onclick="editExpense(${idx},'${esc(e.description)}','${esc(e.category)}',${e.amount},'${e.rollover}',${e.dia})">&#9998;</button>
+        <button onclick="deleteExpense(${idx})">&#10005;</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setSort(col) {
+  if (state.sortColumn === col) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortColumn = col;
+    state.sortDir = 'asc';
+  }
+  renderExpenseList();
+}
+
+function filterByCategory(cat) {
+  state.categoryFilter = state.categoryFilter === cat ? null : cat;
+  renderExpenseList();
+  renderCategoryBadges(state.monthData);
+}
+
+function clearCategoryFilter() {
+  state.categoryFilter = null;
+  renderExpenseList();
+  renderCategoryBadges(state.monthData);
 }
 
 function esc(s) { return s.replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
@@ -967,16 +1100,16 @@ async function loadHistory() {
     data: {
       labels,
       datasets: [
-        { label: 'Gasto', data: spent, backgroundColor: '#4fc3f788', borderColor: '#4fc3f7', borderWidth: 1 },
-        { label: 'Budget', data: budget, backgroundColor: '#66bb6a44', borderColor: '#66bb6a', borderWidth: 1, type: 'line', tension: .2 }
+        { label: 'Gasto', data: spent, backgroundColor: '#c9974c88', borderColor: '#c9974c', borderWidth: 1 },
+        { label: 'Budget', data: budget, backgroundColor: '#6fae7f44', borderColor: '#6fae7f', borderWidth: 1, type: 'line', tension: .2 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#a0a0a0' } } },
+      plugins: { legend: { labels: { color: '#8a9690' } } },
       scales: {
-        x: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } },
-        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }
+        x: { ticks: { color: '#8a9690' }, grid: { color: '#2d3634' } },
+        y: { ticks: { color: '#8a9690' }, grid: { color: '#2d3634' } }
       }
     }
   });
