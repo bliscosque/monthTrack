@@ -22,7 +22,7 @@ All documentation must be written in **English**. Domain terms (Caixa, Notas, Di
 
 ## Session state (Jul 2026)
 
-Backend (FastAPI) and frontend (SPA) implemented. 34 tests pass.
+Backend (FastAPI) and frontend (SPA) implemented. 35 tests pass.
 Data stored as `.md` files in `backend/data/`. Run with:
 ```
 cd backend && .venv/bin/uvicorn monthtrack.app:app --reload

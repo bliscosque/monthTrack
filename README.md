@@ -95,7 +95,7 @@ cd backend
 .venv/bin/pytest -v
 ```
 
-34 integration tests cover expenses, rollover, categories, notes, and caixas.
+35 integration tests cover expenses, rollover, categories, notes, and caixas.
 
 ## Domain model
 
