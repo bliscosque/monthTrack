@@ -62,6 +62,14 @@ def test_post_expense_adds_to_month(client, data_dir):
     assert len(get_resp.json()["expenses"]) == 3
 
 
+def test_post_expense_with_dia_zero_is_allowed(client, data_dir):
+    resp = client.post("/api/months/2026/1/expenses", json={
+        "dia": 0, "description": "Assinatura mensal", "category": "Casa", "amount": 30.0,
+    })
+    assert resp.status_code == 201
+    assert resp.json()["dia"] == 0
+
+
 def test_post_expense_with_rollover_does_not_split_automatically(client, data_dir):
     client.put("/api/months/2026/1/budget", json={"budget": 50})
     resp = client.post("/api/months/2026/1/expenses", json={

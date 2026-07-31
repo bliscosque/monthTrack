@@ -57,7 +57,7 @@ class BudgetUpdate(BaseModel):
 
 
 class ExpenseCreate(BaseModel):
-    dia: int = Field(ge=1, le=31)
+    dia: int = Field(ge=0, le=31)
     description: str
     category: str
     amount: float = Field(gt=0)

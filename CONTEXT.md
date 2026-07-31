@@ -6,6 +6,9 @@ An app to track monthly expenses against a monthly budget.
 
 **Expense (Despesa)**:
 Any outgoing monetary transaction recorded during the month. Has a date, description, category, and amount.
+The date (`dia`) may be `0`, meaning the expense applies to the whole month
+rather than a specific day (e.g. rollover carryover, or any charge the user
+doesn't want tied to a single day).
 _Avoid_: Gasto, purchase, transaction, outflow
 
 **Budget**:

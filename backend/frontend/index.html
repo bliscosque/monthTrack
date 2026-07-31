@@ -360,7 +360,7 @@ body {
     <div class="form-row">
       <div class="form-group">
         <label>Dia</label>
-        <input type="number" id="formDia" min="1" max="31" value="1">
+        <select id="formDia"></select>
       </div>
       <div class="form-group" style="flex:2">
         <label>Valor (R$)</label>
@@ -409,7 +409,7 @@ body {
     <div class="form-row">
       <div class="form-group">
         <label>Dia</label>
-        <input type="number" id="caixaFormDia" min="1" max="31" value="1">
+        <select id="caixaFormDia"></select>
       </div>
       <div class="form-group" style="flex:2">
         <label>Valor (R$)</label>
@@ -685,10 +685,32 @@ async function saveBudget() {
   loadMonth();
 }
 
+function daysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+function todayDayDefault() {
+  const now = new Date();
+  if (now.getFullYear() === state.year && now.getMonth() + 1 === state.month) {
+    return now.getDate();
+  }
+  return 1;
+}
+
+function populateDiaSelect(selectEl, year, month, selected) {
+  const last = daysInMonth(year, month);
+  let opts = '<option value="0">0 (no mês)</option>';
+  for (let d = 1; d <= last; d++) {
+    opts += `<option value="${d}">${d}</option>`;
+  }
+  selectEl.innerHTML = opts;
+  selectEl.value = String(selected);
+}
+
 async function openExpenseForm(idx, desc, cat, amount, rollover, dia) {
   state.editingIdx = idx != null ? idx : null;
   document.getElementById('expenseModalTitle').textContent = idx != null ? 'Editar despesa' : 'Nova despesa';
-  document.getElementById('formDia').value = dia != null ? dia : '';
+  populateDiaSelect(document.getElementById('formDia'), state.year, state.month, dia != null ? dia : todayDayDefault());
   document.getElementById('formDesc').value = desc != null ? desc : '';
   document.getElementById('formAmount').value = amount != null ? amount : '';
   document.getElementById('formRollover').checked = rollover === 'x';
@@ -819,7 +841,8 @@ async function loadCaixaDetail() {
 function openCaixaForm(mode, idx) {
   caixaFormMode = mode;
   caixaFormEditIdx = idx != null ? idx : -1;
-  document.getElementById('caixaFormDia').value = 1;
+  const diaSel = document.getElementById('caixaFormDia');
+  populateDiaSelect(diaSel, state.year, state.month, todayDayDefault());
   document.getElementById('caixaFormValor').value = '';
   if (mode === 'add') {
     document.getElementById('caixaFormTitle').textContent = 'Adicionar valor';
@@ -829,7 +852,7 @@ function openCaixaForm(mode, idx) {
     document.getElementById('caixaFormTitle').textContent = 'Editar item';
     api('GET', `/api/months/${state.year}/${state.month}`).then(data => {
       if (data && data.caixas && data.caixas[idx]) {
-        document.getElementById('caixaFormDia').value = data.caixas[idx].data;
+        diaSel.value = String(data.caixas[idx].data);
         document.getElementById('caixaFormValor').value = Math.abs(data.caixas[idx].valor);
       }
     });
@@ -844,7 +867,7 @@ function closeCaixaForm() {
 async function saveCaixaForm() {
   const dia = parseInt(document.getElementById('caixaFormDia').value);
   const val = parseFloat(document.getElementById('caixaFormValor').value);
-  if (isNaN(dia) || dia < 1 || dia > 31) return;
+  if (isNaN(dia) || dia < 0 || dia > 31) return;
   if (isNaN(val) || val <= 0) return;
   if (caixaFormMode === 'edit') {
     const data = await api('GET', `/api/months/${state.year}/${state.month}`);
