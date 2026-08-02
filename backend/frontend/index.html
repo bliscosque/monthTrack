@@ -622,7 +622,7 @@ async function loadMonth() {
 function renderCategoryBadges(data) {
   const cats = {};
   for (const e of data.expenses) {
-    if (!e.rollover) { cats[e.category] = (cats[e.category]||0) + e.amount; }
+    cats[e.category] = (cats[e.category]||0) + e.amount;
   }
   const breakEl = document.getElementById('catBreakdown');
   if (Object.keys(cats).length === 0) {
@@ -902,7 +902,8 @@ async function openExpenseForm(idx, desc, cat, amount, rollover, dia) {
   document.getElementById('formAmount').value = amount != null ? amount : '';
   document.getElementById('formRollover').checked = rollover === 'x';
   const sel = document.getElementById('formCategory');
-  sel.innerHTML = categories.map(c => `<option value="${c.name}"${cat===c.name?' selected':''}>${c.emoji||''} ${c.name}</option>`).join('');
+  const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = sortedCategories.map(c => `<option value="${c.name}"${cat===c.name?' selected':''}>${c.emoji||''} ${c.name}</option>`).join('');
   document.getElementById('expenseModal').classList.add('open');
 }
 
@@ -1138,13 +1139,19 @@ async function renderEmprestimosPessoaList() {
     el.innerHTML = '<div class="empty">Nenhuma pessoa cadastrada. Adicione em Configurações.</div>';
     return;
   }
-  el.innerHTML = pessoas.map(p => {
+  const totalGeral = items.reduce((s,e) => s + e.valor, 0);
+  let html = `<div class="caixa-total-row">
+    <span class="tipo">Total (todas as pessoas)</span>
+    <span class="saldo" style="color:${totalGeral === 0 ? 'var(--green)' : 'var(--red)'}"><strong>R$${totalGeral.toFixed(2)}</strong></span>
+  </div>`;
+  html += pessoas.map(p => {
     const saldo = items.filter(e => e.pessoa === p.name).reduce((s,e) => s + e.valor, 0);
     return `<div class="caixa-total-row" onclick="openEmprestimoPessoa('${esc(p.name)}')">
       <span class="tipo">${p.emoji||''} ${esc(p.name)}</span>
       <span class="saldo" style="color:${saldo === 0 ? 'var(--green)' : 'var(--red)'}">R$${saldo.toFixed(2)}</span>
     </div>`;
   }).join('');
+  el.innerHTML = html;
 }
 
 async function openEmprestimoPessoa(name) {
@@ -1156,8 +1163,13 @@ async function renderEmprestimoDetail() {
   const data = await api('GET', `/api/months/${state.year}/${state.month}`);
   const all = (data && data.emprestimos) || [];
   const items = all.map((e, idx) => ({...e, idx})).filter(e => e.pessoa === emprestimoPessoa);
+  const saldo = items.reduce((s,e) => s + e.valor, 0);
 
   let html = `<div class="caixa-total-row" onclick="loadEmprestimosTab()" style="cursor:pointer;color:var(--accent);font-size:13px">&larr; Voltar</div>`;
+  html += `<div class="caixa-total-row">
+    <span class="tipo">${esc(emprestimoPessoa)}</span>
+    <span class="saldo" style="color:${saldo === 0 ? 'var(--green)' : 'var(--red)'}"><strong>R$${saldo.toFixed(2)}</strong></span>
+  </div>`;
   if (items.length === 0) {
     html += '<div class="empty">Nenhum empréstimo neste mês</div>';
   } else {
