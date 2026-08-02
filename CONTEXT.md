@@ -48,3 +48,37 @@ withdrawals). The monthly dashboard shows each type in a compact row with
 the real balance (all entries summed) per type, with drill-down by month.
 Types are defined in `backend/data/caixas.md` (same format as `cat.md`).
 _Avoid_: Account, wallet, envelope
+
+**Pessoa (Person)**:
+A family member or friend the user lends money to. Defined in
+`backend/data/pessoas.md` (same format as `cat.md`): name plus optional
+emoji. Full CRUD (add/edit/remove) via Configurações, unlike Caixa types.
+Removing a Pessoa does not delete their historical Emprestimo entries.
+_Avoid_: Contact, cliente, devedor
+
+**Emprestimo (Loan)**:
+A signed monetary entry tracked per month via a secondary table
+(`## Emprestimos`) in the same `.md` file, linked to a Pessoa. Positive
+`valor` = money lent; negative `valor` = a payment received (a "Pagamento"
+is not a separate entity, just an Emprestimo row with a negative value and
+`Parcelas=1`). Unlike Expense/CaixaItem, its date field is the loan's full
+origination date (`dd/mm/aa`), constant across every installment of the
+series — not a day-of-month within the file it lives in.
+Emprestimos sit **outside the budget**: they never affect `total_spent`,
+`remaining`, or the progress bar.
+The **Empréstimos** tab shows only the current month's net balance per
+Pessoa (no cross-month aggregate, unlike Caixas) — click a Pessoa to see
+that month's items.
+_Avoid_: Dívida, conta a receber, IOU
+
+**Parcela (Installment)**:
+One row of an Emprestimo whose `Parcelas` (total count) is greater than 1.
+Creating a multi-parcela loan pre-generates every installment across the
+following months in one operation (creating those month files if needed),
+each with the per-installment `Valor` the user entered and an incrementing
+`ParcelaAtual`. Sibling installments are identified by matching
+Pessoa + Description + Data + Parcelas across month files — there is no
+series id field. "Quitar antecipado" (early payoff) sums the remaining
+future installments, deletes them from their month files, and writes the
+consolidated total plus a matching payment into the current month.
+_Avoid_: Series id, loan id
