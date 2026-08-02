@@ -26,8 +26,9 @@ All data lives in `backend/data/` as markdown files.
 data/
 ├── cat.md              ← categories (one per line)
 ├── caixas.md           ← caixa types (CP, CC, CB)
+├── pessoas.md          ← people you lend money to (one per line)
 └── 2026/
-    ├── jan.md          ← budget + notes + expenses + caixas
+    ├── jan.md          ← budget + notes + expenses + caixas + emprestimos
     ├── fev.md
     └── ...
 ```
@@ -48,7 +49,14 @@ Notas: My notes for the month
 |------|------|-------|
 | 1    | CP   | 500.0 |
 | 15   | CC   | -200.0 |
+
+## Emprestimos
+| Data | Pessoa | Description | Valor | Parcelas | ParcelaAtual |
+|------|--------|-------------|-------|----------|--------------|
+| 01/01/26 | Mom | Fridge | 300.00 | 3 | 1 |
 ```
+
+`Emprestimos` tracks money lent to family/friends — positive `Valor` is a loan, negative is a payment received. It sits outside the budget (doesn't affect `total_spent`/`remaining`). See [ADR-0005](docs/adr/0005-emprestimos.md) for the full model.
 
 Set `Rollover` to `x` for expenses eligible for manual carry-over. Click the
 rollover button in the UI to split the expense when ready.
@@ -71,6 +79,9 @@ rollover button in the UI to split the expense when ready.
 | POST/PUT/DELETE | `/api/months/{year}/{month}/caixas[/{idx}]` | Caixa item CRUD |
 | GET/PUT | `/api/caixas/tipos[/{tipo}]` | Caixa type list/edit |
 | GET | `/api/caixas/saldos[?tipo=]` | Consolidated balances |
+| GET/POST/PUT/DELETE | `/api/pessoas[/{name}]` | Pessoa CRUD |
+| POST/PUT/DELETE | `/api/months/{year}/{month}/emprestimos[/{idx}]` | Emprestimo item CRUD (POST spreads installments across future months) |
+| POST | `/api/months/{year}/{month}/emprestimos/{idx}/quitar` | Early payoff (consolidates remaining installments into the current month) |
 
 ## Project structure
 
@@ -95,7 +106,7 @@ cd backend
 .venv/bin/pytest -v
 ```
 
-35 integration tests cover expenses, rollover, categories, notes, and caixas.
+49 integration tests cover expenses, rollover, categories, notes, caixas, pessoas, and emprestimos.
 
 ## Domain model
 
