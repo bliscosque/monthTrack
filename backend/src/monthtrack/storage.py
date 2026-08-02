@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from monthtrack.models import MonthData, Expense, Category, CaixaItem, CaixaTipo
+from monthtrack.models import (
+    MonthData, Expense, Category, CaixaItem, CaixaTipo, Emprestimo, Pessoa,
+)
 
 
 MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun",
@@ -10,6 +12,10 @@ MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun",
 def _month_path(data_dir: str, year: int, month: int) -> Path:
     name = MONTH_NAMES[month - 1]
     return Path(data_dir) / str(year) / f"{name}.md"
+
+
+def _advance_month(year: int, month: int) -> tuple[int, int]:
+    return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
 def parse_month(data_dir: str, year: int, month: int) -> MonthData | None:
@@ -43,6 +49,16 @@ def _format_month(data: MonthData) -> str:
                       "|------|------|-------|"])
         for c in data.caixas:
             lines.append(f"| {c.data} | {c.tipo} | {c.valor:.2f} |")
+    if data.emprestimos:
+        lines.extend(["",
+                      "## Emprestimos",
+                      "| Data | Pessoa | Description | Valor | Parcelas | ParcelaAtual |",
+                      "|------|--------|-------------|-------|----------|--------------|"])
+        for e in data.emprestimos:
+            lines.append(
+                f"| {e.data} | {e.pessoa} | {e.description} | {e.valor:.2f} "
+                f"| {e.parcelas} | {e.parcela_atual} |"
+            )
     return "\n".join(lines) + "\n"
 
 
@@ -52,8 +68,10 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
     notes = ""
     expenses: list[Expense] = []
     caixas: list[CaixaItem] = []
+    emprestimos: list[Emprestimo] = []
     section: str | None = None
     in_caixas = False
+    in_emprestimos = False
 
     for line in lines:
         stripped = line.strip()
@@ -68,13 +86,25 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
             notes = stripped.removeprefix("Notas:").strip()
             continue
 
+        if stripped.startswith("## Emprestimos"):
+            in_emprestimos = True
+            in_caixas = False
+            section = None
+            continue
+
         if stripped.startswith("## Caixas"):
             in_caixas = True
+            in_emprestimos = False
             section = None
             continue
 
         if stripped.replace(" ", "").startswith("|---"):
-            section = "caixa" if in_caixas else "expense"
+            if in_emprestimos:
+                section = "emprestimo"
+            elif in_caixas:
+                section = "caixa"
+            else:
+                section = "expense"
             continue
 
         if stripped.startswith("|") and section == "expense":
@@ -99,9 +129,21 @@ def _parse_month_text(text: str, year: int, month: int) -> MonthData:
                     valor=float(parts[2]),
                 ))
 
+        if stripped.startswith("|") and section == "emprestimo":
+            parts = [p.strip() for p in stripped.strip("|").split("|")]
+            if len(parts) >= 6:
+                emprestimos.append(Emprestimo(
+                    data=parts[0],
+                    pessoa=parts[1],
+                    description=parts[2],
+                    valor=float(parts[3]),
+                    parcelas=int(parts[4]),
+                    parcela_atual=int(parts[5]),
+                ))
+
     return MonthData(
         year=year, month=month, budget=budget, notes=notes,
-        expenses=expenses, caixas=caixas,
+        expenses=expenses, caixas=caixas, emprestimos=emprestimos,
     )
 
 
@@ -223,6 +265,100 @@ def delete_caixa_item(data_dir: str, year: int, month: int, idx: int) -> bool:
     return True
 
 
+# --- Emprestimo Items ---
+
+def add_emprestimo(data_dir: str, year: int, month: int, item: Emprestimo) -> list[Emprestimo]:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        raise FileNotFoundError(f"Month {year}/{month} not found")
+
+    first = item.model_copy(update={"parcela_atual": 1})
+    data.emprestimos.append(first)
+    write_month(data_dir, data)
+    created = [first]
+
+    cur_year, cur_month = year, month
+    for parcela_atual in range(2, item.parcelas + 1):
+        cur_year, cur_month = _advance_month(cur_year, cur_month)
+        next_data = parse_month(data_dir, cur_year, cur_month)
+        if next_data is None:
+            next_data = MonthData(year=cur_year, month=cur_month)
+        row = item.model_copy(update={"parcela_atual": parcela_atual})
+        next_data.emprestimos.append(row)
+        write_month(data_dir, next_data)
+        created.append(row)
+
+    return created
+
+
+def update_emprestimo_item(data_dir: str, year: int, month: int, idx: int,
+                           updates: dict) -> Emprestimo | None:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        return None
+    if idx < 0 or idx >= len(data.emprestimos):
+        return None
+    current = data.emprestimos[idx]
+    clean = {k: v for k, v in updates.items() if v is not None}
+    updated = current.model_copy(update=clean)
+    data.emprestimos[idx] = updated
+    write_month(data_dir, data)
+    return updated
+
+
+def delete_emprestimo_item(data_dir: str, year: int, month: int, idx: int) -> bool:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        return False
+    if idx < 0 or idx >= len(data.emprestimos):
+        return False
+    data.emprestimos.pop(idx)
+    write_month(data_dir, data)
+    return True
+
+
+def quitar_emprestimo(data_dir: str, year: int, month: int, idx: int) -> list[Emprestimo]:
+    data = parse_month(data_dir, year, month)
+    if data is None:
+        raise FileNotFoundError(f"Month {year}/{month} not found")
+    if idx < 0 or idx >= len(data.emprestimos):
+        raise FileNotFoundError(f"Emprestimo at index {idx} not found")
+
+    item = data.emprestimos[idx]
+    remaining = item.parcelas - item.parcela_atual
+    if remaining <= 0:
+        raise ValueError(f"Emprestimo at index {idx} has no future installments")
+
+    total = 0.0
+    cur_year, cur_month = year, month
+    for _ in range(remaining):
+        cur_year, cur_month = _advance_month(cur_year, cur_month)
+        future_data = parse_month(data_dir, cur_year, cur_month)
+        if future_data is None:
+            continue
+        match_idxs = [
+            i for i, e in enumerate(future_data.emprestimos)
+            if e.pessoa == item.pessoa and e.description == item.description
+            and e.data == item.data and e.parcelas == item.parcelas
+        ]
+        if not match_idxs:
+            continue
+        total += sum(future_data.emprestimos[i].valor for i in match_idxs)
+        future_data.emprestimos = [
+            e for i, e in enumerate(future_data.emprestimos) if i not in match_idxs
+        ]
+        write_month(data_dir, future_data)
+
+    loan_row = Emprestimo(data=item.data, pessoa=item.pessoa, description=item.description,
+                          valor=total, parcelas=1, parcela_atual=1)
+    payment_row = Emprestimo(data=item.data, pessoa=item.pessoa, description=item.description,
+                             valor=-total, parcelas=1, parcela_atual=1)
+    data.emprestimos.append(loan_row)
+    data.emprestimos.append(payment_row)
+    write_month(data_dir, data)
+    return [loan_row, payment_row]
+
+
 def get_caixa_agregado(data_dir: str, year: int, month: int) -> list[dict]:
     data = parse_month(data_dir, year, month)
     if data is None:
@@ -339,6 +475,72 @@ def delete_category(data_dir: str, name: str) -> bool:
     if len(filtered) == len(cats):
         return False
     write_categories(data_dir, filtered)
+    return True
+
+
+# --- Pessoas ---
+
+def _pessoas_path(data_dir: str) -> Path:
+    return Path(data_dir) / "pessoas.md"
+
+
+def parse_pessoas(data_dir: str) -> list[Pessoa]:
+    path = _pessoas_path(data_dir)
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    return _parse_pessoas_text(text)
+
+
+def _parse_pessoas_text(text: str) -> list[Pessoa]:
+    pessoas: list[Pessoa] = []
+    for line in text.strip().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            parts = stripped[2:].strip().split(maxsplit=1)
+            if len(parts) == 1:
+                pessoas.append(Pessoa(name=parts[0], emoji=None))
+            elif len(parts) == 2:
+                name = parts[0]
+                emoji = parts[1] if len(parts[1]) <= 2 else None
+                pessoas.append(Pessoa(name=name, emoji=emoji if emoji else None))
+    return pessoas
+
+
+def write_pessoas(data_dir: str, pessoas: list[Pessoa]) -> None:
+    lines = []
+    for p in pessoas:
+        line = f"- {p.name}"
+        if p.emoji:
+            line += f" {p.emoji}"
+        lines.append(line)
+    _pessoas_path(data_dir).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def add_pessoa(data_dir: str, pessoa: Pessoa) -> list[Pessoa]:
+    pessoas = parse_pessoas(data_dir)
+    pessoas.append(pessoa)
+    write_pessoas(data_dir, pessoas)
+    return pessoas
+
+
+def update_pessoa(data_dir: str, name: str, updates: dict) -> Pessoa | None:
+    pessoas = parse_pessoas(data_dir)
+    for p in pessoas:
+        if p.name == name:
+            updated = p.model_copy(update={k: v for k, v in updates.items() if v is not None})
+            pessoas[pessoas.index(p)] = updated
+            write_pessoas(data_dir, pessoas)
+            return updated
+    return None
+
+
+def delete_pessoa(data_dir: str, name: str) -> bool:
+    pessoas = parse_pessoas(data_dir)
+    filtered = [p for p in pessoas if p.name != name]
+    if len(filtered) == len(pessoas):
+        return False
+    write_pessoas(data_dir, filtered)
     return True
 
 

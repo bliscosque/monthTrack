@@ -12,6 +12,7 @@ from monthtrack.models import (
     MonthData, BudgetUpdate, ExpenseCreate, ExpenseUpdate,
     CategoryCreate, CategoryUpdate, DashboardMonth, HistoricalPoint,
     Expense, Category, CaixaItem, CaixaTipo,
+    Pessoa, PessoaCreate, PessoaUpdate, Emprestimo, EmprestimoCreate, EmprestimoUpdate,
 )
 from monthtrack.security import create_access_token, get_password_hash, require_auth, verify_password
 from monthtrack.storage import (
@@ -21,6 +22,8 @@ from monthtrack.storage import (
     add_caixa_item, update_caixa_item, delete_caixa_item,
     get_caixa_agregado, get_caixa_saldos,
     parse_caixas_tipos, update_caixa_tipo,
+    parse_pessoas, add_pessoa, update_pessoa, delete_pessoa,
+    add_emprestimo, update_emprestimo_item, delete_emprestimo_item, quitar_emprestimo,
 )
 
 
@@ -271,6 +274,62 @@ def create_app(data_dir: str = "data") -> FastAPI:
         ok = delete_category(app.state.data_dir, name)
         if not ok:
             raise HTTPException(status_code=404, detail="Category not found")
+
+    @app.get("/api/pessoas")
+    def get_pessoas(_=Depends(require_auth)):
+        pessoas = parse_pessoas(app.state.data_dir)
+        return [p.model_dump() for p in pessoas]
+
+    @app.post("/api/pessoas", status_code=201)
+    def create_pessoa(body: PessoaCreate, _=Depends(require_auth)):
+        pessoa = Pessoa(**body.model_dump())
+        add_pessoa(app.state.data_dir, pessoa)
+        return pessoa.model_dump()
+
+    @app.put("/api/pessoas/{name}")
+    def edit_pessoa(name: str, body: PessoaUpdate, _=Depends(require_auth)):
+        result = update_pessoa(app.state.data_dir, name, body.model_dump(exclude_none=True))
+        if result is None:
+            raise HTTPException(status_code=404, detail="Pessoa not found")
+        return result.model_dump()
+
+    @app.delete("/api/pessoas/{name}", status_code=204)
+    def remove_pessoa(name: str, _=Depends(require_auth)):
+        ok = delete_pessoa(app.state.data_dir, name)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Pessoa not found")
+
+    @app.post("/api/months/{year}/{month}/emprestimos", status_code=201)
+    def create_emprestimo_item(year: int, month: int, body: EmprestimoCreate, _=Depends(require_auth)):
+        try:
+            created = add_emprestimo(app.state.data_dir, year, month, Emprestimo(**body.model_dump()))
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Month not found")
+        return created[0].model_dump()
+
+    @app.put("/api/months/{year}/{month}/emprestimos/{idx}")
+    def edit_emprestimo_item(year: int, month: int, idx: int, body: EmprestimoUpdate, _=Depends(require_auth)):
+        result = update_emprestimo_item(app.state.data_dir, year, month, idx,
+                                        body.model_dump(exclude_none=True))
+        if result is None:
+            raise HTTPException(status_code=404, detail="Emprestimo not found")
+        return result.model_dump()
+
+    @app.delete("/api/months/{year}/{month}/emprestimos/{idx}", status_code=204)
+    def remove_emprestimo_item(year: int, month: int, idx: int, _=Depends(require_auth)):
+        ok = delete_emprestimo_item(app.state.data_dir, year, month, idx)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Emprestimo not found")
+
+    @app.post("/api/months/{year}/{month}/emprestimos/{idx}/quitar")
+    def quitar_emprestimo_item(year: int, month: int, idx: int, _=Depends(require_auth)):
+        try:
+            results = quitar_emprestimo(app.state.data_dir, year, month, idx)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Emprestimo not found")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Emprestimo has no future installments")
+        return [r.model_dump() for r in results]
 
     @app.get("/api/caixas/tipos")
     def get_caixa_tipos(_=Depends(require_auth)):

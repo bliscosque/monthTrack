@@ -28,6 +28,15 @@ class CaixaTipo(BaseModel):
     emoji: str | None = None
 
 
+class Emprestimo(BaseModel):
+    data: str
+    pessoa: str
+    description: str
+    valor: float
+    parcelas: int = Field(default=1, ge=1)
+    parcela_atual: int = Field(default=1, ge=1)
+
+
 class MonthData(BaseModel):
     year: int = Field(ge=1970)
     month: int = Field(ge=1, le=12)
@@ -35,6 +44,7 @@ class MonthData(BaseModel):
     notes: str = ""
     expenses: list[Expense] = []
     caixas: list[CaixaItem] = []
+    emprestimos: list[Emprestimo] = []
 
     @property
     def total_spent(self) -> float:
@@ -79,6 +89,37 @@ class CategoryCreate(BaseModel):
 
 class CategoryUpdate(BaseModel):
     emoji: str | None = None
+
+
+class Pessoa(BaseModel):
+    name: str
+    emoji: str | None = None
+
+
+class PessoaCreate(BaseModel):
+    name: str
+    emoji: str | None = None
+
+
+class PessoaUpdate(BaseModel):
+    emoji: str | None = None
+
+
+class EmprestimoCreate(BaseModel):
+    data: str
+    pessoa: str
+    description: str
+    valor: float
+    parcelas: int = Field(default=1, ge=1)
+
+
+class EmprestimoUpdate(BaseModel):
+    data: str | None = None
+    pessoa: str | None = None
+    description: str | None = None
+    valor: float | None = None
+    parcelas: int | None = Field(default=None, ge=1)
+    parcela_atual: int | None = Field(default=None, ge=1)
 
 
 class DashboardMonth(BaseModel):

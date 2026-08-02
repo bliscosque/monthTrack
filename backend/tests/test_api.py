@@ -420,3 +420,208 @@ def test_caixa_agregacao_mensal_positivos(client):
     agg = resp.json()
     cp = next(a for a in agg if a["tipo"] == "CP")
     assert cp["total_positivos"] == 1500.0  # 1000 (fixture) + 500
+
+
+# --- Pessoas CRUD ---
+
+def test_pessoas_crud(client, data_dir):
+    resp = client.get("/api/pessoas")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    client.post("/api/pessoas", json={"name": "Heber", "emoji": "🧑"})
+    client.post("/api/pessoas", json={"name": "Elaine", "emoji": "👩"})
+
+    resp = client.get("/api/pessoas")
+    assert len(resp.json()) == 2
+
+    client.put("/api/pessoas/Heber", json={"emoji": "🧔"})
+    resp = client.get("/api/pessoas")
+    heber = next(p for p in resp.json() if p["name"] == "Heber")
+    assert heber["emoji"] == "🧔"
+
+    client.delete("/api/pessoas/Elaine")
+    resp = client.get("/api/pessoas")
+    assert len(resp.json()) == 1
+
+
+def test_delete_pessoa_does_not_affect_existing_emprestimos(client, data_dir):
+    client.post("/api/pessoas", json={"name": "Heber"})
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "05/01/26", "pessoa": "Heber", "description": "Remédio",
+        "valor": 50.0, "parcelas": 1,
+    })
+
+    client.delete("/api/pessoas/Heber")
+
+    resp = client.get("/api/months/2026/1")
+    assert resp.json()["emprestimos"] == [
+        {"data": "05/01/26", "pessoa": "Heber", "description": "Remédio",
+         "valor": 50.0, "parcelas": 1, "parcela_atual": 1},
+    ]
+
+
+# --- Emprestimos CRUD ---
+
+def test_add_single_installment_loan(client, data_dir):
+    resp = client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Uber",
+        "valor": 40.0,
+    })
+    assert resp.status_code == 201
+    item = resp.json()
+    assert item["parcelas"] == 1
+    assert item["parcela_atual"] == 1
+
+    resp = client.get("/api/months/2026/1")
+    assert len(resp.json()["emprestimos"]) == 1
+
+
+def test_emprestimo_does_not_affect_budget(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Empréstimo grande",
+        "valor": 1000.0,
+    })
+
+    resp = client.get("/api/months/2026/1/dashboard")
+    d = resp.json()
+    assert d["total_spent"] == 1435.0  # unchanged from fixture (expenses + caixas positivos)
+    assert d["remaining"] == 1565.0
+
+
+def test_payment_is_a_negative_value_emprestimo(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Uber", "valor": 40.0,
+    })
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "12/01/26", "pessoa": "Heber", "description": "Pagamento", "valor": -40.0,
+    })
+
+    resp = client.get("/api/months/2026/1")
+    heber_items = [e for e in resp.json()["emprestimos"] if e["pessoa"] == "Heber"]
+    assert sum(e["valor"] for e in heber_items) == 0.0
+
+
+def test_edit_emprestimo_item(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Uber", "valor": 40.0,
+    })
+    resp = client.put("/api/months/2026/1/emprestimos/0", json={"valor": 45.0})
+    assert resp.status_code == 200
+    assert resp.json()["valor"] == 45.0
+
+
+def test_delete_emprestimo_item(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Uber", "valor": 40.0,
+    })
+    resp = client.delete("/api/months/2026/1/emprestimos/0")
+    assert resp.status_code == 204
+
+    resp = client.get("/api/months/2026/1")
+    assert resp.json()["emprestimos"] == []
+
+
+def test_emprestimo_item_out_of_range_returns_404(client, data_dir):
+    resp = client.put("/api/months/2026/1/emprestimos/0", json={"valor": 10.0})
+    assert resp.status_code == 404
+    resp = client.delete("/api/months/2026/1/emprestimos/0")
+    assert resp.status_code == 404
+
+
+# --- Emprestimos: installment spread ---
+
+def test_multi_installment_loan_spreads_across_future_months(client, data_dir):
+    resp = client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Geladeira",
+        "valor": 300.0, "parcelas": 3,
+    })
+    assert resp.status_code == 201
+    first = resp.json()
+    assert first["parcela_atual"] == 1
+    assert first["valor"] == 300.0
+
+    jan = client.get("/api/months/2026/1").json()["emprestimos"]
+    fev = client.get("/api/months/2026/2").json()["emprestimos"]
+    mar = client.get("/api/months/2026/3").json()["emprestimos"]
+
+    assert [e["parcela_atual"] for e in jan] == [1]
+    assert [e["parcela_atual"] for e in fev] == [2]
+    assert [e["parcela_atual"] for e in mar] == [3]
+    assert all(e["valor"] == 300.0 for e in jan + fev + mar)
+    assert all(e["data"] == "10/01/26" for e in jan + fev + mar)
+    assert all(e["description"] == "Geladeira" for e in jan + fev + mar)
+
+
+def test_multi_installment_loan_creates_missing_future_month_file(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Geladeira",
+        "valor": 300.0, "parcelas": 2,
+    })
+
+    text = (data_dir / "2026" / "fev.md").read_text(encoding="utf-8")
+    assert "## Emprestimos" in text
+    assert "Geladeira" in text
+    assert "| 10/01/26 | Heber | Geladeira | 300.00 | 2 | 2 |" in text
+
+
+def test_multi_installment_loan_wraps_year(client, data_dir):
+    client.put("/api/months/2026/12/budget", json={"budget": 1000})
+    client.post("/api/months/2026/12/emprestimos", json={
+        "data": "10/12/26", "pessoa": "Heber", "description": "Viagem",
+        "valor": 100.0, "parcelas": 2,
+    })
+
+    resp = client.get("/api/months/2027/1")
+    assert resp.status_code == 200
+    assert len(resp.json()["emprestimos"]) == 1
+    assert resp.json()["emprestimos"][0]["parcela_atual"] == 2
+
+
+# --- Emprestimos: quitar antecipado ---
+
+def test_quitar_antecipado_consolidates_remaining_into_current_month(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Geladeira",
+        "valor": 300.0, "parcelas": 3,
+    })
+
+    resp = client.post("/api/months/2026/1/emprestimos/0/quitar")
+    assert resp.status_code == 200
+    new_rows = resp.json()
+    assert len(new_rows) == 2
+    assert sorted(r["valor"] for r in new_rows) == [-600.0, 600.0]
+
+    jan = client.get("/api/months/2026/1").json()["emprestimos"]
+    assert len(jan) == 3  # original parcela 1/3 + consolidated loan + payment
+    assert sum(e["valor"] for e in jan if e["parcelas"] == 1) == 0.0
+
+    fev = client.get("/api/months/2026/2").json()["emprestimos"]
+    mar = client.get("/api/months/2026/3").json()["emprestimos"]
+    assert fev == []
+    assert mar == []
+
+
+def test_quitar_antecipado_without_future_installments_returns_400(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Uber", "valor": 40.0,
+    })
+    resp = client.post("/api/months/2026/1/emprestimos/0/quitar")
+    assert resp.status_code == 400
+
+
+def test_quitar_antecipado_matches_series_ignoring_valor_and_parcela_atual(client, data_dir):
+    client.post("/api/months/2026/1/emprestimos", json={
+        "data": "10/01/26", "pessoa": "Heber", "description": "Geladeira",
+        "valor": 300.0, "parcelas": 3,
+    })
+    # Renegotiate the 2nd installment's value before paying off early.
+    fev_items = client.get("/api/months/2026/2").json()["emprestimos"]
+    fev_idx = 0
+    assert fev_items[fev_idx]["parcela_atual"] == 2
+    client.put(f"/api/months/2026/2/emprestimos/{fev_idx}", json={"valor": 250.0})
+
+    resp = client.post("/api/months/2026/1/emprestimos/0/quitar")
+    assert resp.status_code == 200
+    new_rows = resp.json()
+    assert sorted(r["valor"] for r in new_rows) == [-550.0, 550.0]  # 250 + 300

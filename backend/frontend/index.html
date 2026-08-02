@@ -304,8 +304,9 @@ input[type="number"] {
     <div class="tabs">
       <div class="tab active" data-tab="month" onclick="switchTab('month')">Mês</div>
       <div class="tab" data-tab="caixas" onclick="switchTab('caixas')">Caixas</div>
+      <div class="tab" data-tab="emprestimos" onclick="switchTab('emprestimos')">Empréstimos</div>
       <div class="tab" data-tab="history" onclick="switchTab('history')">Histórico</div>
-      <div class="tab" data-tab="settings" onclick="switchTab('settings')">Categorias</div>
+      <div class="tab" data-tab="settings" onclick="switchTab('settings')">Configurações</div>
     </div>
 
     <div id="tab-month">
@@ -388,6 +389,13 @@ input[type="number"] {
       </div>
     </div>
 
+    <div id="tab-emprestimos" style="display:none">
+      <div class="card">
+        <h3>Empréstimos</h3>
+        <div id="emprestimosList"></div>
+      </div>
+    </div>
+
     <div id="tab-settings" style="display:none">
       <div class="card">
         <h3>Categorias</h3>
@@ -396,6 +404,15 @@ input[type="number"] {
           <input id="newCatName" placeholder="Nome da categoria">
           <input id="newCatEmoji" placeholder="Emoji" style="max-width:60px">
           <button onclick="addCategory()">+</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Pessoas</h3>
+        <div class="settings-list" id="pessoaSettingsList"></div>
+        <div class="add-cat-form">
+          <input id="newPessoaName" placeholder="Nome da pessoa">
+          <input id="newPessoaEmoji" placeholder="Emoji" style="max-width:60px">
+          <button onclick="addPessoa()">+</button>
         </div>
       </div>
     </div>
@@ -467,6 +484,42 @@ input[type="number"] {
     <div class="form-actions">
       <button class="btn-secondary" onclick="closeCaixaForm()">Cancelar</button>
       <button class="btn-primary" onclick="saveCaixaForm()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="emprestimoFormModal">
+  <div class="modal">
+    <h2 id="emprestimoFormTitle">Novo empréstimo</h2>
+    <div class="form-group">
+      <label>Data (dd/mm/aa)</label>
+      <input id="emprestimoFormData" placeholder="10/08/26">
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <input id="emprestimoFormDesc" placeholder="Do que se trata?">
+    </div>
+    <div class="form-row" id="emprestimoFormParcelasRow">
+      <div class="form-group">
+        <label>Parcelas</label>
+        <input type="number" min="1" step="1" id="emprestimoFormParcelas" value="1" oninput="syncEmprestimoValores('parcelas')">
+      </div>
+      <div class="form-group">
+        <label>Valor da parcela (R$)</label>
+        <input type="number" step="0.01" id="emprestimoFormValorMensal" placeholder="0,00" oninput="syncEmprestimoValores('mensal')">
+      </div>
+      <div class="form-group">
+        <label>Valor total (R$)</label>
+        <input type="number" step="0.01" id="emprestimoFormValorTotal" placeholder="0,00" oninput="syncEmprestimoValores('total')">
+      </div>
+    </div>
+    <div class="form-group" id="emprestimoFormValorSimplesRow" style="display:none">
+      <label>Valor (R$)</label>
+      <input type="number" step="0.01" id="emprestimoFormValorSimples" placeholder="0,00">
+    </div>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="closeEmprestimoForm()">Cancelar</button>
+      <button class="btn-primary" onclick="saveEmprestimoForm()">Salvar</button>
     </div>
   </div>
 </div>
@@ -799,6 +852,7 @@ async function navMonth(delta) {
   if (state.month > 12) { state.month = 1; state.year++; }
   if (state.month < 1) { state.month = 12; state.year--; }
   loadMonth();
+  if (document.querySelector('.tab.active')?.dataset.tab === 'emprestimos') loadEmprestimosTab();
 }
 
 async function openBudgetForm(currentBudget) {
@@ -1051,14 +1105,183 @@ async function loadCaixaBreakdown(tipo) {
   ).join('');
 }
 
+// --- Empréstimos ---
+
+let pessoas = [];
+let emprestimoPessoa = null;
+let emprestimoFormMode = 'loan'; // 'loan' | 'payment' | 'edit'
+let emprestimoFormEditIdx = -1;
+
+async function loadPessoas() {
+  pessoas = await api('GET','/api/pessoas') || [];
+}
+
+function todayDDMMAA() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+async function loadEmprestimosTab() {
+  emprestimoPessoa = null;
+  await loadPessoas();
+  await renderEmprestimosPessoaList();
+}
+
+async function renderEmprestimosPessoaList() {
+  const data = await api('GET', `/api/months/${state.year}/${state.month}`);
+  const items = (data && data.emprestimos) || [];
+  const el = document.getElementById('emprestimosList');
+  if (pessoas.length === 0) {
+    el.innerHTML = '<div class="empty">Nenhuma pessoa cadastrada. Adicione em Configurações.</div>';
+    return;
+  }
+  el.innerHTML = pessoas.map(p => {
+    const saldo = items.filter(e => e.pessoa === p.name).reduce((s,e) => s + e.valor, 0);
+    return `<div class="caixa-total-row" onclick="openEmprestimoPessoa('${esc(p.name)}')">
+      <span class="tipo">${p.emoji||''} ${esc(p.name)}</span>
+      <span class="saldo" style="color:${saldo === 0 ? 'var(--green)' : 'var(--red)'}">R$${saldo.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function openEmprestimoPessoa(name) {
+  emprestimoPessoa = name;
+  await renderEmprestimoDetail();
+}
+
+async function renderEmprestimoDetail() {
+  const data = await api('GET', `/api/months/${state.year}/${state.month}`);
+  const all = (data && data.emprestimos) || [];
+  const items = all.map((e, idx) => ({...e, idx})).filter(e => e.pessoa === emprestimoPessoa);
+
+  let html = `<div class="caixa-total-row" onclick="loadEmprestimosTab()" style="cursor:pointer;color:var(--accent);font-size:13px">&larr; Voltar</div>`;
+  if (items.length === 0) {
+    html += '<div class="empty">Nenhum empréstimo neste mês</div>';
+  } else {
+    html += items.map(e => {
+      const parcelaLabel = e.parcelas > 1 ? ` (${e.parcela_atual}/${e.parcelas})` : '';
+      const podeQuitar = e.parcelas > 1 && e.parcela_atual < e.parcelas;
+      return `<div class="caixa-item-row">
+        <span class="data">${esc(e.data)}</span>
+        <span>${esc(e.description)}${parcelaLabel}</span>
+        <span class="valor" style="color:${e.valor >= 0 ? 'var(--accent)' : 'var(--green)'}">R$${e.valor.toFixed(2)}</span>
+        <span class="actions">
+          ${podeQuitar ? `<button onclick="quitarEmprestimo(${e.idx})" title="Quitar antecipado">&#10003;</button>` : ''}
+          <button onclick="openEmprestimoForm('edit',${e.idx})">&#9998;</button>
+          <button onclick="deleteEmprestimoItem(${e.idx})">&#10005;</button>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  html += `<div class="form-actions" style="margin-top:10px">
+    <button class="btn-primary" onclick="openEmprestimoForm('loan')">+ Adicionar empréstimo</button>
+    <button class="btn-secondary" onclick="openEmprestimoForm('payment')">+ Registrar pagamento</button>
+  </div>`;
+  document.getElementById('emprestimosList').innerHTML = html;
+}
+
+function openEmprestimoForm(mode, idx) {
+  emprestimoFormMode = mode;
+  emprestimoFormEditIdx = idx != null ? idx : -1;
+  document.getElementById('emprestimoFormData').value = todayDDMMAA();
+  document.getElementById('emprestimoFormDesc').value = mode === 'payment' ? 'Pagamento' : '';
+  document.getElementById('emprestimoFormParcelas').value = 1;
+  document.getElementById('emprestimoFormValorMensal').value = '';
+  document.getElementById('emprestimoFormValorTotal').value = '';
+  document.getElementById('emprestimoFormValorSimples').value = '';
+
+  const isLoan = mode === 'loan';
+  document.getElementById('emprestimoFormParcelasRow').style.display = isLoan ? '' : 'none';
+  document.getElementById('emprestimoFormValorSimplesRow').style.display = isLoan ? 'none' : '';
+
+  if (mode === 'loan') {
+    document.getElementById('emprestimoFormTitle').textContent = 'Novo empréstimo';
+  } else if (mode === 'payment') {
+    document.getElementById('emprestimoFormTitle').textContent = 'Registrar pagamento';
+  } else {
+    document.getElementById('emprestimoFormTitle').textContent = 'Editar item';
+    api('GET', `/api/months/${state.year}/${state.month}`).then(data => {
+      const item = data && data.emprestimos[idx];
+      if (!item) return;
+      document.getElementById('emprestimoFormData').value = item.data;
+      document.getElementById('emprestimoFormDesc').value = item.description;
+      document.getElementById('emprestimoFormValorSimples').value = item.valor;
+    });
+  }
+
+  document.getElementById('emprestimoFormModal').classList.add('open');
+}
+
+function closeEmprestimoForm() {
+  document.getElementById('emprestimoFormModal').classList.remove('open');
+}
+
+function syncEmprestimoValores(source) {
+  const parcelas = Math.max(1, parseInt(document.getElementById('emprestimoFormParcelas').value) || 1);
+  const mensalEl = document.getElementById('emprestimoFormValorMensal');
+  const totalEl = document.getElementById('emprestimoFormValorTotal');
+  if (source === 'total') {
+    const total = parseFloat(totalEl.value);
+    if (!isNaN(total)) mensalEl.value = (total / parcelas).toFixed(2);
+  } else {
+    const mensal = parseFloat(mensalEl.value);
+    if (!isNaN(mensal)) totalEl.value = (mensal * parcelas).toFixed(2);
+  }
+}
+
+async function saveEmprestimoForm() {
+  const data = document.getElementById('emprestimoFormData').value.trim();
+  const description = document.getElementById('emprestimoFormDesc').value.trim();
+  if (!data || !description) return;
+
+  if (emprestimoFormMode === 'edit') {
+    const valor = parseFloat(document.getElementById('emprestimoFormValorSimples').value);
+    if (isNaN(valor)) return;
+    await api('PUT', `/api/months/${state.year}/${state.month}/emprestimos/${emprestimoFormEditIdx}`, {
+      data, description, valor,
+    });
+  } else if (emprestimoFormMode === 'payment') {
+    const valor = parseFloat(document.getElementById('emprestimoFormValorSimples').value);
+    if (isNaN(valor) || valor <= 0) return;
+    await api('POST', `/api/months/${state.year}/${state.month}/emprestimos`, {
+      data, pessoa: emprestimoPessoa, description, valor: -valor, parcelas: 1,
+    });
+  } else {
+    const parcelas = Math.max(1, parseInt(document.getElementById('emprestimoFormParcelas').value) || 1);
+    const valor = parseFloat(document.getElementById('emprestimoFormValorMensal').value);
+    if (isNaN(valor) || valor <= 0) return;
+    await api('POST', `/api/months/${state.year}/${state.month}/emprestimos`, {
+      data, pessoa: emprestimoPessoa, description, valor, parcelas,
+    });
+  }
+  closeEmprestimoForm();
+  await renderEmprestimoDetail();
+}
+
+async function deleteEmprestimoItem(idx) {
+  if (!confirm('Remover este item?')) return;
+  await api('DELETE', `/api/months/${state.year}/${state.month}/emprestimos/${idx}`);
+  await renderEmprestimoDetail();
+}
+
+async function quitarEmprestimo(idx) {
+  if (!confirm('Quitar antecipadamente as parcelas restantes?')) return;
+  await api('POST', `/api/months/${state.year}/${state.month}/emprestimos/${idx}/quitar`);
+  await renderEmprestimoDetail();
+}
+
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  ['month','caixas','history','settings'].forEach(t => {
+  ['month','caixas','emprestimos','history','settings'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (el) el.style.display = t === name ? '' : 'none';
   });
   if (name === 'history') loadHistory();
   if (name === 'caixas') loadCaixasTab();
+  if (name === 'emprestimos') loadEmprestimosTab();
   if (name === 'settings') loadSettings();
 }
 
@@ -1193,6 +1416,36 @@ async function loadSettings() {
       <button onclick="deleteCategory('${c.name}')">Remover</button>
     </div>`
   ).join('');
+  await loadPessoas();
+  renderPessoaSettings();
+}
+
+function renderPessoaSettings() {
+  const el = document.getElementById('pessoaSettingsList');
+  el.innerHTML = pessoas.map(p =>
+    `<div class="cat-row">
+      <span class="name">${p.emoji||''} ${esc(p.name)}</span>
+      <button onclick="deletePessoa('${esc(p.name)}')">Remover</button>
+    </div>`
+  ).join('');
+}
+
+async function addPessoa() {
+  const name = document.getElementById('newPessoaName').value.trim();
+  const emoji = document.getElementById('newPessoaEmoji').value.trim();
+  if (!name) return;
+  await api('POST','/api/pessoas', {name, emoji: emoji||null});
+  document.getElementById('newPessoaName').value = '';
+  document.getElementById('newPessoaEmoji').value = '';
+  await loadPessoas();
+  renderPessoaSettings();
+}
+
+async function deletePessoa(name) {
+  if (!confirm(`Remover pessoa "${name}"?`)) return;
+  await api('DELETE', `/api/pessoas/${encodeURIComponent(name)}`);
+  await loadPessoas();
+  renderPessoaSettings();
 }
 
 async function addCategory() {
